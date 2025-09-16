@@ -7,6 +7,8 @@
  * 2025-09-14 14:11 - 초기 생성: VV3.md의 핵심 로직과 이벤트 리스너 통합
  * 2025-09-14 14:40 - v4 아키텍처 리팩토링: 2-API 호출, DAD 스냅샷, 작업 큐 로직 적용
  * 2025-09-16 13:50 - 사용자 요구사항에 맞춰 API 재시도 및 오류 처리 로직 전면 개편
+ * 2025-09-16 14:00 - 사용자 설계안에 맞춰 이미지 생성(processTask) 로직 전면 재설계
+ * 2025-09-16 14:20 - UX 개선: 1차 API 완료 후 즉시 렌더링 및 백그라운드 처리 로직 도입
  * =====================
  */
 
@@ -19,9 +21,6 @@ import * as utils from './utils.js';
 
 // --- SECTION: 핵심 게임 흐름 (Orchestrator) (v4) ---
 
-/**
- * 게임을 시작하는 메인 함수 (v4)
- */
 async function startGame() {
     try {
         const genre = dom.genreInput.value;
@@ -34,7 +33,6 @@ async function startGame() {
         ui.showPageLoader("세계관 구성 중...");
         const worldBuildContext = [{ role: "user", parts: [{ text: `장르: ${genre}\n모험: ${adventure}` }] }];
         
-        // API 키 존재 여부에 따라 동적으로 API 사용 결정
         const briefJsonResponse = await api.callGenerativeAPI(worldBuildContext, cfg.worldBuilderSystemPrompt, !!state.userApiKey);
         
         if (!briefJsonResponse) throw new Error("캠페인 생성 AI로부터 응답을 받지 못했습니다.");
@@ -42,15 +40,13 @@ async function startGame() {
         const initialDadSnapshot = utils.parseCampaignBrief(briefJsonResponse);
         initialDadSnapshot.genre = genre;
         initialDadSnapshot.adventure = adventure;
-        state.setInitialDadSnapshot(initialDadSnapshot); // 초기 설정 저장
+        state.setInitialDadSnapshot(initialDadSnapshot);
 
         dom.setupScreen.classList.add('hidden');
         dom.storyScreen.classList.remove('hidden');
         dom.storyScreen.classList.add('grid');
 
-        ui.showPageLoader("첫 장면 생성 중...");
-        const initialPrompt = `모험이 시작됩니다. 당신은 방금 생성된 세계관에 따라 이야기를 진행해야 합니다. 주인공을 '새로운 핵심 인물'로서 생성하고, 모험을 시작하는 첫 번째 장면을 완성해주세요.`;
-        await processTurn(initialPrompt, true);
+        await processTurn(`모험이 시작됩니다. 당신은 방금 생성된 세계관에 따라 이야기를 진행해야 합니다. 주인공을 '새로운 핵심 인물'로서 생성하고, 모험을 시작하는 첫 번째 장면을 완성해주세요.`, true);
 
     } catch (error) {
         console.error("Game start error:", error);
@@ -69,13 +65,10 @@ async function startGame() {
     }
 }
 
-/**
- * 사용자 입력을 처리하는 함수 (v4)
- */
 async function handleUserInput(e) {
     if (e) e.preventDefault();
     const text = dom.userInput.value.trim();
-    if (!text || dom.sendBtn.disabled) return;
+    if (!text || state.isGenerating) return;
 
     if (state.isBranchingActive) {
         await handleBranching(state.currentSceneIndex, text);
@@ -85,14 +78,9 @@ async function handleUserInput(e) {
     dom.userInput.value = '';
     dom.userInput.style.height = 'auto';
     ui.clearChoices();
-    ui.toggleLoading(true, "이야기 생성 중...");
     await processTurn(text);
-    ui.toggleLoading(false);
 }
 
-/**
- * 과거 시점에서 새로운 분기(branch)를 생성하는 함수 (v4)
- */
 async function handleBranching(branchIndex, userChoice) {
     state.setSceneArchive(state.sceneArchive.slice(0, branchIndex + 1));
     state.setCurrentSceneIndex(branchIndex);
@@ -102,77 +90,46 @@ async function handleBranching(branchIndex, userChoice) {
     dom.userInput.value = '';
     dom.userInput.style.height = 'auto';
     ui.clearChoices();
-    ui.toggleLoading(true, "새로운 이야기를 만드는 중...");
     await processTurn(userChoice);
-    ui.toggleLoading(false);
 }
 
-/**
- * 한 턴(turn)의 상호작용을 처리하는 v4 핵심 함수
- * @param {string} userText - 사용자가 입력한 텍스트
- * @param {boolean} isFirstScene - 현재 턴이 첫 장면인지 여부
- */
 export async function processTurn(userText, isFirstScene = false) {
+    state.setIsGenerating(true);
+    ui.updateGlobalLoadingState();
+
     try {
         const previousDadSnapshot = isFirstScene ? state.initialDadSnapshot : state.sceneArchive[state.currentSceneIndex].dadSnapshot;
 
-        // --- 1차 API 호출: 서사 생성 ---
-        ui.toggleLoading(true, "1/3: 서사 생성 중...");
         const storyContext = buildStoryContext(userText, previousDadSnapshot);
         const storyResponse = await api.callGenerativeAPI(storyContext, cfg.storyGeneratorSystemPrompt, !!state.userApiKey);
         if (!storyResponse) throw new Error("1차 API(서사 생성)로부터 응답을 받지 못했습니다.");
         const { title, story } = utils.parseModelResponse(storyResponse);
+        
+        if (isFirstScene) ui.hidePageLoader();
 
-        // --- 2차 API 호출: 분석 및 계획 수립 ---
-        ui.toggleLoading(true, "2/3: 장면 분석 및 계획 수립 중...");
-        const analysisContext = buildAnalysisContext(story, previousDadSnapshot);
-        let analysisResponse;
-        try {
-            analysisResponse = await api.callGenerativeAPI(analysisContext, cfg.analysisSystemPrompt, false);
-        } catch (error) {
-            if (error instanceof api.ApiError && error.status === 429 && state.userApiKey) {
-                console.warn("내부 API(분석) 할당량 초과. API 키를 사용하여 재시도합니다.");
-                ui.toggleLoading(true, "2/3: 내부 API 할당량 초과, API 키로 재시도 중...");
-                analysisResponse = await api.callGenerativeAPI(analysisContext, cfg.analysisSystemPrompt, true);
-            } else {
-                throw error;
-            }
-        }
-        if (!analysisResponse) throw new Error("2차 API(분석)로부터 응답을 받지 못했습니다.");
-        const analysisResult = utils.parseModelResponse(analysisResponse);
-
-        // --- DAD 스냅샷 생성 및 장면 데이터 구성 ---
-        const newDadSnapshot = mergeDadSnapshot(previousDadSnapshot, analysisResult.newAssets);
-
-        const sceneData = {
+        const tempSceneData = {
             user_input: userText,
             title,
             story,
-            hints: analysisResult.hints,
-            choices: analysisResult.choices,
-            displayImageId: analysisResult.displayImageId,
-            dadSnapshot: newDadSnapshot,
-            raw_story_response: storyResponse,
-            raw_analysis_response: analysisResponse,
-            taskQueue: analysisResult.taskQueue 
+            isComplete: false,
+            dadSnapshot: previousDadSnapshot,
         };
 
-        // --- 장면 아카이브 업데이트 ---
         if (state.currentSceneIndex < state.sceneArchive.length - 1) {
             state.setSceneArchive(state.sceneArchive.slice(0, state.currentSceneIndex + 1));
         }
-        state.sceneArchive.push(sceneData);
+        state.sceneArchive.push(tempSceneData);
         state.setCurrentSceneIndex(state.sceneArchive.length - 1);
-
-        // --- 작업 큐(이미지 생성) 실행 ---
-        ui.toggleLoading(true, "3/3: 이미지 에셋 생성 중...");
-        await executeTaskQueue(analysisResult.taskQueue, newDadSnapshot);
-
-        // --- 최종 렌더링 ---
+        
         ui.renderScene(state.currentSceneIndex);
+
+        finishSceneGeneration(state.currentSceneIndex, previousDadSnapshot, story, storyResponse);
 
     } catch (error) {
         console.error("Turn processing error:", error);
+        state.setIsGenerating(false);
+        ui.updateGlobalLoadingState();
+        
         if (error instanceof api.ApiError && !state.userApiKey) {
             alert("API 호출 중 오류가 발생했습니다. 내부 API 사용량이 소진되었을 수 있습니다. 설정 메뉴를 열어 API 키를 입력해주세요.");
             dom.settingsModal.classList.remove('hidden');
@@ -184,13 +141,54 @@ export async function processTurn(userText, isFirstScene = false) {
             dom.setupScreen.classList.remove('hidden');
             dom.storyScreen.classList.add('hidden');
         }
-    } finally {
-        ui.toggleLoading(false);
     }
 }
 
+async function finishSceneGeneration(sceneIndex, previousDadSnapshot, story, storyResponse) {
+    try {
+        const analysisContext = buildAnalysisContext(story, previousDadSnapshot);
+        let analysisResponse;
+        try {
+            analysisResponse = await api.callGenerativeAPI(analysisContext, cfg.analysisSystemPrompt, false);
+        } catch (error) {
+            if (error instanceof api.ApiError && error.status === 429 && state.userApiKey) {
+                console.warn("내부 API(분석) 할당량 초과. API 키를 사용하여 재시도합니다.");
+                analysisResponse = await api.callGenerativeAPI(analysisContext, cfg.analysisSystemPrompt, true);
+            } else {
+                throw error;
+            }
+        }
+        if (!analysisResponse) throw new Error("2차 API(분석)로부터 응답을 받지 못했습니다.");
+        const analysisResult = utils.parseModelResponse(analysisResponse);
 
-// --- SECTION: 컨텍스트 및 DAD 관리 (v4) ---
+        const newDadSnapshot = mergeDadSnapshot(previousDadSnapshot, analysisResult.newAssets);
+
+        await executeTaskQueue(analysisResult.taskQueue, newDadSnapshot);
+
+        const finalSceneData = {
+            ...state.sceneArchive[sceneIndex],
+            hints: analysisResult.hints,
+            choices: analysisResult.choices,
+            displayImageId: analysisResult.displayImageId,
+            dadSnapshot: newDadSnapshot,
+            raw_story_response: storyResponse,
+            raw_analysis_response: analysisResponse,
+            taskQueue: analysisResult.taskQueue,
+            isComplete: true,
+        };
+        state.sceneArchive[sceneIndex] = finalSceneData;
+
+    } catch (error) {
+        console.error("Background scene generation error:", error);
+        state.sceneArchive[sceneIndex].error = true;
+    } finally {
+        state.setIsGenerating(false);
+        if (state.currentSceneIndex === sceneIndex) {
+            ui.renderScene(sceneIndex);
+        }
+        ui.updateGlobalLoadingState();
+    }
+}
 
 function buildStoryContext(currentUserAction, dadSnapshot) {
     const narrativeContext = buildNarrativeContext();
@@ -252,16 +250,8 @@ function mergeDadSnapshot(previousSnapshot, newAssets) {
     return newSnapshot;
 }
 
-
-// --- SECTION: 에셋 생성 (v4) ---
-
 async function executeTaskQueue(taskQueue, dadSnapshot) {
-    if (!taskQueue || taskQueue.length === 0) {
-        dom.imageLoader.classList.add('hidden');
-        return;
-    }
-
-    dom.imageLoader.classList.remove('hidden');
+    if (!taskQueue || taskQueue.length === 0) return;
 
     const keyVisualTask = taskQueue.find(t => t.type === 'key_visual');
     if (keyVisualTask && !state.imageCache.has(keyVisualTask.assetId)) {
@@ -269,16 +259,21 @@ async function executeTaskQueue(taskQueue, dadSnapshot) {
     }
 
     for (const task of taskQueue) {
-        if (task.type !== 'key_visual' && !state.imageCache.has(task.assetId)) {
-            await processTask(task, dadSnapshot);
+        if (task.type !== 'key_visual') {
+            const imageCacheKey = `${task.assetId}_${task.type}`;
+            if (!state.imageCache.has(imageCacheKey)) {
+                await processTask(task, dadSnapshot);
+            }
         }
     }
-
-    dom.imageLoader.classList.add('hidden');
 }
 
 async function processTask(task, dadSnapshot) {
-    dom.imageLoaderText.textContent = `에셋 생성 중: ${task.assetId} (${task.type})`;
+    const imageCacheKey = task.type === 'key_visual' ? task.assetId : `${task.assetId}_${task.type}`;
+    
+    // 이 부분은 ui.js로 옮겨져야 할 수 있습니다.
+    // dom.imageLoader.classList.remove('hidden');
+    // dom.imageLoaderText.textContent = `에셋 생성 중: ${task.assetId} (${task.type})`;
 
     const promptTemplate = cfg.promptTemplates[task.type];
     if (!promptTemplate) {
@@ -288,56 +283,64 @@ async function processTask(task, dadSnapshot) {
 
     let promptData = { ...promptTemplate };
     const referenceImages = [];
-    let targetAssetInfo = {};
+    
+    switch (task.type) {
+        case 'key_visual':
+            promptData.data_payload = dadSnapshot;
+            break;
 
-    if (state.imageCache.has('campaign_key_visual')) {
-        referenceImages.push({ id: 'campaign_key_visual', base64Data: state.imageCache.get('campaign_key_visual').split(',')[1] });
-    }
+        case '3_view_reference':
+            promptData.data_payload = dadSnapshot.keyCharacters.find(c => c.id === task.assetId) || dadSnapshot.keyItems.find(i => i.id === task.assetId) || {};
+            if (state.imageCache.has('campaign_key_visual')) {
+                referenceImages.push({ id: 'campaign_key_visual', base64Data: state.imageCache.get('campaign_key_visual').split(',')[1] });
+            }
+            break;
 
-    if (task.type !== 'key_visual') {
-        targetAssetInfo = dadSnapshot.keyCharacters.find(c => c.id === task.assetId) || 
-                          dadSnapshot.keyItems.find(i => i.id === task.assetId) || {};
-        promptData.data_payload = targetAssetInfo;
-    }
+        case 'head_portrait':
+            promptData.data_payload = dadSnapshot.keyCharacters.find(c => c.id === task.assetId) || {};
+            if (state.imageCache.has('campaign_key_visual')) {
+                referenceImages.push({ id: 'campaign_key_visual', base64Data: state.imageCache.get('campaign_key_visual').split(',')[1] });
+            }
+            const threeViewCacheKey = `${task.assetId}_3_view_reference`;
+            if (state.imageCache.has(threeViewCacheKey)) {
+                 referenceImages.push({ id: threeViewCacheKey, base64Data: state.imageCache.get(threeViewCacheKey).split(',')[1] });
+            }
+            break;
 
-    if (task.type === 'head_portrait') {
-        if (state.imageCache.has(task.assetId)) {
-             referenceImages.push({ id: task.assetId, base64Data: state.imageCache.get(task.assetId).split(',')[1] });
-        }
-    }
+        case 'illustration':
+            promptData.scene_text_payload = state.sceneArchive[state.currentSceneIndex].story;
+            promptData.data_payload = { dadSnapshot };
+            
+            if (state.imageCache.has('campaign_key_visual')) {
+                 referenceImages.push({ id: 'campaign_key_visual', base64Data: state.imageCache.get('campaign_key_visual').split(',')[1] });
+            }
 
-    if (task.type === 'illustration') {
-        promptData.scene_text_payload = state.sceneArchive[state.currentSceneIndex].story;
-        promptData.data_payload = { dadSnapshot };
+            const currentTaskQueue = state.sceneArchive[state.currentSceneIndex].taskQueue || [];
+            currentTaskQueue.forEach(t => {
+                const assetCacheKey = `${t.assetId}_${t.type}`;
+                if (t.type === '3_view_reference' && state.imageCache.has(assetCacheKey)) {
+                    referenceImages.push({ id: assetCacheKey, base64Data: state.imageCache.get(assetCacheKey).split(',')[1] });
+                }
+            });
+            break;
     }
 
     try {
         let imageUrl = await api.callImageAPI(promptData, referenceImages, false);
-        
-        if (imageUrl) {
-            state.imageCache.set(task.assetId, imageUrl);
-        } else {
-            throw new Error("이미지 URL을 받지 못했습니다.");
-        }
-
+        state.imageCache.set(imageCacheKey, imageUrl);
     } catch (error) {
         if (error instanceof api.ApiError && error.status === 429 && state.userApiKey) {
-            console.warn("내부 이미지 API 할당량 초과. API 키를 사용하여 재시도합니다.");
-            dom.imageLoaderText.textContent = `내부 할당량 초과, API 키로 재시도: ${task.assetId}`;
+            console.warn(`내부 이미지 API 할당량 초과 (${task.assetId}). API 키를 사용하여 재시도합니다.`);
             try {
                 const imageUrl = await api.callImageAPI(promptData, referenceImages, true);
-                if (imageUrl) {
-                    state.imageCache.set(task.assetId, imageUrl);
-                } else {
-                     throw new Error("API 키를 사용한 이미지 생성에 실패했습니다.");
-                }
+                state.imageCache.set(imageCacheKey, imageUrl);
             } catch (retryError) {
                  console.error(`Image API retry failed for task: ${task.assetId}`, retryError);
-                 state.imageCache.set(task.assetId, "https://placehold.co/1200x1800/ff0000/FFF?text=Gen+Failed");
+                 state.imageCache.set(imageCacheKey, "https://placehold.co/1200x1800/ff0000/FFF?text=Gen+Failed");
             }
         } else {
             console.error(`Failed to generate image for task: ${task.assetId}`, error);
-            state.imageCache.set(task.assetId, "https://placehold.co/1200x1800/ff0000/FFF?text=Gen+Failed");
+            state.imageCache.set(imageCacheKey, "https://placehold.co/1200x1800/ff0000/FFF?text=Gen+Failed");
             if (error instanceof api.ApiError && !state.userApiKey) {
                  alert("이미지 생성 중 오류가 발생했습니다. 내부 API 사용량이 소진되었을 수 있습니다. 설정에서 API 키를 입력하시면 계속할 수 있습니다.");
                  dom.settingsModal.classList.remove('hidden');
