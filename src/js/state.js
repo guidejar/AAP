@@ -32,6 +32,9 @@ export let initialDadSnapshot = {};
 // 사용자가 과거 시점에서 새로운 분기를 만들고 있는지 여부를 나타냅니다.
 export let isBranchingActive = false;
 
+// 백그라운드에서 2차 API, 이미지 생성 등 시간이 걸리는 작업이 진행중인지 여부
+export let isGenerating = false;
+
 /**
  * 상태 값을 변경하기 위한 함수들 (Setters)
  * 직접 변수를 수정하는 대신, 이 함수들을 통해 상태를 변경하면 코드의 흐름을 추적하기 용이해집니다.
@@ -64,4 +67,8 @@ export function setInitialDadSnapshot(snapshot) {
 
 export function setIsBranchingActive(isActive) {
     isBranchingActive = isActive;
+}
+
+export function setIsGenerating(generating) {
+    isGenerating = generating;
 }
