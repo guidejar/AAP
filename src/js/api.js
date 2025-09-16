@@ -6,88 +6,116 @@
  * === 변경 히스토리 ===
  * 2025-09-14 14:09 - 초기 생성: VV3.md에서 API 호출 로직 분리
  * 2025-09-14 14:35 - v4 아키텍처 리팩토링: 2-API 구조에 맞게 API 호출 함수 재설계
+ * 2025-09-14 15:25 - note/gemini.md 명세에 따라 API 모델 버전을 특정 버전으로 고정
+ * 2025-09-16 13:30 - 사용자 요구사항에 따라 API 모델 사용 정책 업데이트 및 오류 처리 강화
+ * 2025-09-16 13:45 - API 오류 처리를 위한 커스텀 에러 클래스 도입 및 재시도 로직 지원
  * =====================
  */
 
 import * as state from './state.js';
 
 /**
+ * API 호출 시 발생하는 특정 오류를 식별하기 위한 커스텀 에러 클래스
+ */
+export class ApiError extends Error {
+    constructor(message, status, modelName) {
+        super(message);
+        this.name = 'ApiError';
+        this.status = status; // HTTP 상태 코드
+        this.modelName = modelName; // 사용된 모델명
+    }
+}
+
+/**
  * 텍스트 기반 Generative API를 호출하는 범용 함수 (v4)
- * @param {object[]} context - API에 전달할 컨텍스트 (대화 기록 등)
- * @param {string} systemPrompt - AI에게 역할을 부여하는 시스템 프롬프트
- * @param {boolean} useApiKey - 사용자의 API 키를 사용할지 여부. false일 경우 키 없이 Flash 모델 호출.
- * @returns {Promise<string|null>} AI가 생성한 텍스트 또는 실패 시 null
+ * @param {object[]} context - API에 전달할 컨텍스트
+ * @param {string} systemPrompt - 시스템 프롬프트
+ * @param {boolean} useApiKey - API 키 사용 여부
+ * @returns {Promise<string>} AI가 생성한 텍스트
+ * @throws {ApiError} API 호출 실패 시
+ * @throws {Error} 그 외 네트워크 오류 등
  */
 export async function callGenerativeAPI(context, systemPrompt, useApiKey) {
-    // 1. API 키 사용 여부에 따라 모델과 키 결정
-    const modelName = useApiKey ? 'gemini-1.5-pro-latest' : 'gemini-1.5-flash-latest';
+    if (useApiKey && !state.userApiKey) {
+        throw new Error("API 키가 설정되지 않았습니다. 설정에서 키를 입력해주세요.");
+    }
+
+    const modelName = useApiKey ? 'gemini-2.5-pro' : 'gemini-2.5-flash-preview-05-20';
     const key = useApiKey ? state.userApiKey : '';
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${key}`;
 
-    // 2. API에 전송할 데이터(payload) 구성
     const payload = {
         contents: context,
-        systemInstruction: {
-            parts: [{ text: systemPrompt }]
-        }
+        systemInstruction: { parts: [{ text: systemPrompt }] }
     };
 
     try {
-        // 3. fetch API를 사용하여 서버에 POST 요청 전송
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
 
-        // 4. 응답 상태 확인
         if (!response.ok) {
-            console.error(`API Error (${modelName}):`, await response.text());
-            return null;
+            const errorBody = await response.text();
+            console.error(`API Error (${modelName}, Status: ${response.status}):`, errorBody);
+            throw new ApiError(`API 호출 실패`, response.status, modelName);
         }
 
-        // 5. 응답 결과를 JSON으로 파싱하고 텍스트 부분만 추출하여 반환
         const result = await response.json();
-        return result.candidates?.[0]?.content?.parts?.[0]?.text;
+        const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (!text) {
+            const blockReason = result.promptFeedback?.blockReason;
+            if (blockReason) {
+                throw new ApiError(`콘텐츠 생성 실패: ${blockReason}`, null, modelName);
+            }
+            console.error(`API Error (${modelName}): 응답에 텍스트 콘텐츠가 없습니다.`, result);
+            throw new Error('API로부터 유효한 텍스트 응답을 받지 못했습니다.');
+        }
+        return text;
+
     } catch (error) {
+        if (error instanceof ApiError) throw error;
         console.error(`API Call Error (${modelName}):`, error);
-        return null;
+        throw new Error(`API 호출 중 네트워크 오류가 발생했습니다. (${modelName})`);
     }
 }
 
 /**
  * 이미지 생성을 위해 Generative Language API를 호출하는 함수 (v4)
- * @param {object} promptData - 프롬프트 템플릿과 데이터가 결합된 JSON 객체
- * @param {Array<{id: string, base64Data: string}>} referenceImages - 참조 이미지 데이터 배열
- * @returns {Promise<string|null>} 생성된 이미지의 Data URL 또는 실패 시 null
+ * @param {object} promptData - 프롬프트 데이터
+ * @param {Array<{id: string, base64Data: string}>} referenceImages - 참조 이미지
+ * @param {boolean} useApiKey - API 키 사용 여부
+ * @returns {Promise<string>} 생성된 이미지의 Data URL
+ * @throws {ApiError} API 호출 실패 시
+ * @throws {Error} 그 외 네트워크 오류 등
  */
-export async function callImageAPI(promptData, referenceImages = []) {
-    // v4 아키텍처에서는 항상 API 키 없이 Flash 모델을 사용합니다.
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateImage?key=`;
+export async function callImageAPI(promptData, referenceImages = [], useApiKey = false) {
+    if (useApiKey && !state.userApiKey) {
+        throw new Error("API 키가 설정되지 않았습니다. 설정에서 키를 입력해주세요.");
+    }
 
-    // 1. API payload의 'parts' 배열을 구성합니다.
-    const parts = [];
+    // API 키 사용 시 Pro 모델, 미사용 시 Flash Image 모델 사용
+    const modelName = useApiKey ? 'gemini-2.5-pro' : 'gemini-2.5-flash-image-preview';
+    const key = useApiKey ? state.userApiKey : '';
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${key}`;
 
-    // 2. 첫 번째 part로, 프롬프트 JSON 객체를 문자열로 변환하여 추가합니다.
-    parts.push({ text: JSON.stringify(promptData) });
-
-    // 3. 두 번째 part부터, 참조 이미지들을 첨부합니다.
-    if (referenceImages && referenceImages.length > 0) {
+    const parts = [{ text: JSON.stringify(promptData) }];
+    if (referenceImages?.length > 0) {
         referenceImages.forEach(img => {
-            if (img && img.base64Data) {
+            if (img?.base64Data) {
                 parts.push({ inlineData: { mimeType: "image/png", data: img.base64Data } });
             }
         });
     }
 
-    // 4. 최종 payload를 구성합니다.
     const payload = {
         contents: [{ parts }],
         generationConfig: { responseModalities: ['IMAGE'] }
     };
 
     try {
-        // 5. API를 호출합니다.
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -95,21 +123,24 @@ export async function callImageAPI(promptData, referenceImages = []) {
         });
 
         if (!response.ok) {
-            console.error("Image API Error:", await response.text());
-            return null;
+            const errorBody = await response.text();
+            console.error(`Image API Error (${modelName}, Status: ${response.status}):`, errorBody);
+            throw new ApiError(`이미지 API 호출 실패`, response.status, modelName);
         }
 
-        // 6. 결과에서 이미지 데이터를 추출하고 Data URL 형식으로 변환하여 반환합니다.
         const result = await response.json();
         const imagePart = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+
         if (imagePart) {
             return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
         }
 
-        console.error("Image API Error: No image data in response", result);
-        return null;
+        console.error(`Image API Error (${modelName}): 응답에 이미지 데이터가 없습니다.`, result);
+        throw new Error('이미지 API로부터 유효한 응답을 받지 못했습니다.');
+
     } catch (error) {
-        console.error("Image API Call Error:", error);
-        return null;
+        if (error instanceof ApiError) throw error;
+        console.error(`Image API Call Error (${modelName}):`, error);
+        throw new Error(`이미지 API 호출 중 네트워크 오류가 발생했습니다. (${modelName})`);
     }
 }
