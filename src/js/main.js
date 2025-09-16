@@ -24,6 +24,7 @@ import * as utils from './utils.js';
  */
 async function startGame() {
     try {
+        console.log(dom.genreInput);
         const genre = dom.genreInput.value;
         const adventure = dom.adventureInput.value;
         if (!genre || !adventure) {
@@ -112,7 +113,7 @@ export async function processTurn(userText, isFirstScene = false) {
         // --- 1차 API 호출: 서사 생성 ---
         ui.toggleLoading(true, "1/2: 서사 생성 중...");
         const storyContext = buildStoryContext(userText, previousDadSnapshot);
-        const storyResponse = await api.callGenerativeAPI(storyContext, cfg.storyGeneratorSystemPrompt, !!state.userApiKey);
+        const storyResponse = await api.callGenerativeAPI(storyContext, cfg.storyGeneratorSystemPrompt, !!state.userApiKey); // API 키 사용
         if (!storyResponse) throw new Error("1차 API(서사 생성)로부터 응답을 받지 못했습니다.");
         const { title, story } = utils.parseModelResponse(storyResponse);
 
