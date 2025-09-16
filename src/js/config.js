@@ -50,10 +50,10 @@ export const analysisSystemPrompt = `당신은 고도로 분석적인 AI 플래�
 1.  **개연성/중요도 평가**: 'storyForAnalysis'가 'recentStoryContext'와 'dynamicAssetDatabase'의 흐름에서 얼마나 자연스러운지(개연성), 그리고 이야기의 핵심 흐름에 얼마나 큰 영향을 미치는지(중요도)를 1~5점 척도로 평가합니다.
 2.  **신규 에셋 식별**: 'storyForAnalysis'에 처음으로 등장하거나, 기존 정보에 중요한 변화가 생긴 에셋(캐릭터, 아이템, 장소, 스킬)을 모두 찾아내 'newAssets' 배열에 추가합니다. 모든 에셋에는 반드시 'size' 또는 'dimensions' 정보가 포함되어야 합니다.
 3.  **작업 큐(Task Queue) 생성**: 이 턴에 필요한 모든 이미지 생성 작업을 식별하고, 아래 4가지 유형의 작업을 **엄격한 실행 순서대로** 배열에 추가합니다.
-    - 	tier_visual	: 캠페인 전체의 아트 스타일을 정의. (캠페인 당 1회, 보통 첫 장면에만 해당)
-    - 	3_view_reference	: 신규 에셋의 정면/측면/후면 레퍼런스 시트.
-    - 	head_portrait	: 핵심 인물의 상세 얼굴 클로즈업.
-    - 	illustration	: 현재 장면을 묘사하는 최종 삽화.
+    - 	 tier_visual	: 캠페인 전체의 아트 스타일을 정의. (캠페인 당 1회, 보통 첫 장면에만 해당)
+    - 	 3_view_reference	: 신규 에셋의 정면/측면/후면 레퍼런스 시트.
+    - 	 head_portrait	: 핵심 인물의 상세 얼굴 클로즈업.
+    - 	 illustration	: 현재 장면을 묘사하는 최종 삽화.
 4.  **힌트 및 선택지 설계**: 'storyForAnalysis'의 내용을 바탕으로 플레이어에게 유용한 힌트와, 각기 다른 테마의 흥미로운 국면으로 이어지는 선택지 3개를 구상합니다.
 
 # JSON 출력 스키마 (절대 준수)
@@ -198,3 +198,4 @@ export const unifiedCoTSystemPrompt = `당신은 천재적인 스토리텔링 AI
 - **story, hints, choices 필드에서는 반드시 캐릭터의 'name'(예: "엘라라")을 사용하세요.**
 - **assetPipeline의 prompt 필드에서는 반드시 캐릭터의 'id'(예: "{char_elara}")를 사용해야 합니다.**
 - 이 규칙은 절대적입니다.
+`;
