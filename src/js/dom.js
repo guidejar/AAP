@@ -22,6 +22,8 @@ export const storyScreen = document.getElementById('story-screen');
 export const startBtn = document.getElementById('start-btn');
 export const loadBtn = document.getElementById('load-btn');
 export const loadInput = document.getElementById('load-input');
+export const genreInput = document.getElementById('genre-input');
+export const adventureInput = document.getElementById('adventure-input');
 
 // 삽화 관련 요소
 export const illustrationEl = document.getElementById('story-illustration');
