@@ -7,6 +7,8 @@
  * 2025-09-14 14:08 - 초기 생성: VV3.md에서 UI 관련 로직 분리
  * 2025-09-14 14:55 - v4 리팩토링: DAD 스냅샷 및 새로운 scene 객체 구조에 맞게 렌더링 함수 수정
  * 2025-09-16 14:30 - UX 개선: 즉시 렌더링 및 전역 로딩 상태 UI 로직 추가
+ * 2025-09-16 14:55 - 버그 수정: 과거 장면 조회 시, 해당 장면에 맞는 선택지가 표시되도록 수정
+ * 2025-09-16 15:10 - 분기(branching) 기능 UX 개선: 과거 장면에서 선택지 활성화 로직 구현
  * =====================
  */
 
@@ -15,8 +17,7 @@ import * as state from './state.js';
 import { processTurn } from './main.js';
 
 /**
- * 특정 장면(scene)을 화면에 렌더링하는 함수 (v4)
- * @param {number} index - 렌더링할 장면의 sceneArchive 인덱스
+ * 특정 장면(scene)을 화면에 렌더링하는 함수
  */
 export function renderScene(index) {
     if (index < 0 || index >= state.sceneArchive.length) return;
@@ -25,13 +26,10 @@ export function renderScene(index) {
     const scene = state.sceneArchive[index];
     const isLatestScene = index === state.sceneArchive.length - 1;
 
-    // 1. 텍스트 정보 업데이트 (항상 가능)
     dom.sceneTitleEl.textContent = scene.title;
     dom.storyOutputEl.textContent = scene.story;
 
-    // 2. 장면 데이터 완전성 여부에 따라 UI 분기 처리
     if (scene.isComplete) {
-        // 2-1. 데이터가 완전한 경우: 최종 콘텐츠 렌더링
         const imageUrl = state.imageCache.get(scene.displayImageId);
         if (imageUrl && dom.illustrationEl.src !== imageUrl) {
             dom.illustrationEl.style.opacity = 0;
@@ -41,50 +39,36 @@ export function renderScene(index) {
             }, 300);
         }
         dom.imageLoader.classList.add('hidden');
-
         renderHintPanel(scene.hints);
-        renderChoices(scene.choices);
-
+        renderChoices(scene.choices, (isLatestScene || state.isBranchingActive) && !state.isGenerating);
     } else {
-        // 2-2. 데이터가 불완전한 경우 (1차 API만 완료된 상태)
         dom.imageLoader.classList.remove('hidden');
         dom.imageLoaderText.textContent = "새로운 삽화 생성 중...";
         dom.hintPanel.innerHTML = '<div class="text-center text-gray-400 p-8">장면 분석 중...</div>';
         clearChoices();
     }
 
-    // 3. UI 상태 업데이트 (입력창, 버튼 등)
     updateUiState(isLatestScene);
-    
-    // 4. 디버그 뷰 업데이트
     toggleDebugView(state.isDebugMode);
 }
 
 /**
  * 현재 씬 상태에 따라 UI의 각 부분을 업데이트하는 함수
- * @param {boolean} isLatestScene - 현재 보고 있는 장면이 최신 장면인지 여부
  */
 function updateUiState(isLatestScene) {
-    if (isLatestScene) {
-        // 최신 장면: 분기 중이 아니라면 일반적인 입력 상태
-        if (!state.isBranchingActive) {
-            dom.pastActionContainer.classList.add('hidden');
-            dom.branchBtn.classList.add('hidden');
-            dom.inputContainer.classList.remove('hidden');
-        }
-    } else {
-        // 과거 장면: 입력창 숨기고, 분기 관련 UI 표시
-        dom.inputContainer.classList.add('hidden');
-        dom.pastActionContainer.classList.remove('hidden');
-        dom.branchBtn.classList.remove('hidden');
+    const isBranching = state.isBranchingActive;
+
+    dom.inputContainer.classList.toggle('hidden', !isLatestScene && !isBranching);
+    dom.pastActionContainer.classList.toggle('hidden', isLatestScene || isBranching);
+    dom.branchBtn.classList.toggle('hidden', isLatestScene || isBranching);
+
+    if (!isLatestScene && !isBranching) {
         dom.pastActionText.textContent = state.sceneArchive[state.currentSceneIndex + 1]?.user_input || '';
     }
 
-    // 이전/다음 버튼 활성화/비활성화
     dom.prevBtn.disabled = state.currentSceneIndex === 0;
     dom.nextBtn.disabled = isLatestScene;
 
-    // 전역 로딩 상태 업데이트
     updateGlobalLoadingState();
 }
 
@@ -92,8 +76,8 @@ function updateUiState(isLatestScene) {
  * 전역 생성 상태(isGenerating)에 따라 입력창의 로딩 UI를 업데이트하는 함수
  */
 export function updateGlobalLoadingState() {
-    const scene = state.sceneArchive[state.currentSceneIndex];
     const isLatestScene = state.currentSceneIndex === state.sceneArchive.length - 1;
+    const isBranching = state.isBranchingActive;
 
     if (state.isGenerating && isLatestScene) {
         dom.inputLoader.classList.remove('hidden');
@@ -102,21 +86,14 @@ export function updateGlobalLoadingState() {
         toggleInput(true);
     } else {
         dom.inputLoader.classList.add('hidden');
-        // 과거 씬에서는 입력창이 항상 비활성화 상태여야 함
-        if (isLatestScene) {
-            dom.inputContainer.classList.remove('hidden');
-            toggleInput(false);
-            if (!state.isBranchingActive) dom.userInput.focus();
-        } else {
-            dom.inputContainer.classList.add('hidden');
+        const shouldBeInteractive = (isLatestScene || isBranching) && !state.isGenerating;
+        toggleInput(!shouldBeInteractive);
+        if (shouldBeInteractive) {
+            dom.userInput.focus();
         }
     }
 }
 
-
-/**
- * 힌트 패널을 생성하고 화면에 표시하는 함수
- */
 function renderHintPanel(hints) {
     dom.hintPanel.innerHTML = '';
     if (!hints) return;
@@ -190,18 +167,24 @@ export function hidePageLoader() {
     dom.pageLoader.classList.add('hidden'); 
 }
 
-function renderChoices(choices) {
+function renderChoices(choices, areClickable = true) {
     clearChoices();
     if (!choices || choices.length === 0) return;
     
     choices.forEach(choiceText => {
         const button = document.createElement('button');
         button.textContent = choiceText;
-        button.className = "bg-indigo-500/60 hover:bg-indigo-500 text-white font-semibold py-1 px-3 rounded-full text-sm transition-colors";
         
-        button.onclick = async () => {
-            await processTurn(choiceText);
-        };
+        if (areClickable) {
+            button.className = "bg-indigo-500/60 hover:bg-indigo-500 text-white font-semibold py-1 px-3 rounded-full text-sm transition-colors";
+            button.onclick = async () => {
+                await processTurn(choiceText);
+            };
+        } else {
+            button.className = "bg-gray-700/50 text-gray-400 font-semibold py-1 px-3 rounded-full text-sm cursor-not-allowed";
+            button.disabled = true;
+        }
+        
         dom.choiceContainer.appendChild(button);
     });
 }
