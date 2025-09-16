@@ -42,7 +42,7 @@ async function startGame() {
         const initialDadSnapshot = utils.parseCampaignBrief(briefJsonResponse);
         initialDadSnapshot.genre = genre;
         initialDadSnapshot.adventure = adventure;
-        state.setInitialCoreSettings(initialDadSnapshot);
+        state.setInitialDadSnapshot(initialDadSnapshot); // 초기 설정 저장
 
         dom.setupScreen.classList.add('hidden');
         dom.storyScreen.classList.remove('hidden');
@@ -114,7 +114,7 @@ async function handleBranching(branchIndex, userChoice) {
  */
 export async function processTurn(userText, isFirstScene = false) {
     try {
-        const previousDadSnapshot = isFirstScene ? state.initialCoreSettings : state.sceneArchive[state.currentSceneIndex].dadSnapshot;
+        const previousDadSnapshot = isFirstScene ? state.initialDadSnapshot : state.sceneArchive[state.currentSceneIndex].dadSnapshot;
 
         // --- 1차 API 호출: 서사 생성 ---
         ui.toggleLoading(true, "1/3: 서사 생성 중...");
