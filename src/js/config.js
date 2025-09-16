@@ -5,18 +5,6 @@
  * 
  * === 변경 히스토리 ===
  * 2025-09-14 14:05 - 초기 생성: VV3.md에서 설정 부분 분리
- * =====================
- */
-
-// 천재적인 '월드 빌더' AI의 시스템 프롬프트
-// 사용자의 초기 입력을 바탕으로 모험의 전체적인 뼈대를 설계합니다.
-/**
- * 파일명: config.js
- * 목적: AI 모델에 전달될 시스템 프롬프트와 주요 설정 상수를 정의합니다.
- * 작성일: 2025-09-14
- * 
- * === 변경 히스토리 ===
- * 2025-09-14 14:05 - 초기 생성: VV3.md에서 설정 부분 분리
  * 2025-09-14 14:30 - v4 아키텍처 리팩토링: 2-API 구조에 맞게 프롬프트 전면 개편
  * =====================
  */
@@ -62,10 +50,10 @@ export const analysisSystemPrompt = `당신은 고도로 분석적인 AI 플래�
 1.  **개연성/중요도 평가**: 'storyForAnalysis'가 'recentStoryContext'와 'dynamicAssetDatabase'의 흐름에서 얼마나 자연스러운지(개연성), 그리고 이야기의 핵심 흐름에 얼마나 큰 영향을 미치는지(중요도)를 1~5점 척도로 평가합니다.
 2.  **신규 에셋 식별**: 'storyForAnalysis'에 처음으로 등장하거나, 기존 정보에 중요한 변화가 생긴 에셋(캐릭터, 아이템, 장소, 스킬)을 모두 찾아내 'newAssets' 배열에 추가합니다. 모든 에셋에는 반드시 'size' 또는 'dimensions' 정보가 포함되어야 합니다.
 3.  **작업 큐(Task Queue) 생성**: 이 턴에 필요한 모든 이미지 생성 작업을 식별하고, 아래 4가지 유형의 작업을 **엄격한 실행 순서대로** 배열에 추가합니다.
-    - `key_visual`: 캠페인 전체의 아트 스타일을 정의. (캠페인 당 1회, 보통 첫 장면에만 해당)
-    - `3_view_reference`: 신규 에셋의 정면/측면/후면 레퍼런스 시트.
-    - `head_portrait`: 핵심 인물의 상세 얼굴 클로즈업.
-    - `illustration`: 현재 장면을 묘사하는 최종 삽화.
+    - 	tier_visual	: 캠페인 전체의 아트 스타일을 정의. (캠페인 당 1회, 보통 첫 장면에만 해당)
+    - 	3_view_reference	: 신규 에셋의 정면/측면/후면 레퍼런스 시트.
+    - 	head_portrait	: 핵심 인물의 상세 얼굴 클로즈업.
+    - 	illustration	: 현재 장면을 묘사하는 최종 삽화.
 4.  **힌트 및 선택지 설계**: 'storyForAnalysis'의 내용을 바탕으로 플레이어에게 유용한 힌트와, 각기 다른 테마의 흥미로운 국면으로 이어지는 선택지 3개를 구상합니다.
 
 # JSON 출력 스키마 (절대 준수)
@@ -132,9 +120,6 @@ export const promptTemplates = {
     }
 };
 
-// 이미지 생성 시 기본적으로 제외할 키워드 (레거시, globalImagePromptRules.negative_keywords로 통합)
-export const NEGATIVE_PROMPT_KEYWORDS = 'text, words, letters, font, signature, watermark, poorly drawn, blurry, ugly';
-
 
 // 이야기의 흐름을 교정하는 '월드 픽서' AI의 시스템 프롬프트
 // 기존 세계 설정과 사용자의 수정 요청을 바탕으로 설정을 재구성합니다.
@@ -182,9 +167,9 @@ export const unifiedCoTSystemPrompt = `당신은 천재적인 스토리텔링 AI
     *   **참조 이미지 생성:** 만약 새로운 핵심 캐릭터가 처음 등장한다면, 그 캐릭터의 3면도('character_reference')를 생성하는 계획을 세웁니다. 이때, 이미지는 반드시 캐릭터의 무표정(neutral expression)의 정면, 측면, 후면을 명확하게 보여주는 고품질 캐릭터 시트(character sheet) 형식으로, **배경은 반드시 단색 흰색(solid white background)이어야 합니다.**
     *   **삽화 생성 (Context-Aware Prompting Protocol):** 아래 프로토콜을 절대적으로 준수하여 삽화('illustration') 계획을 세웁니다.
         *   **[규칙 1] 기본 원칙:** 평상시에는 캐릭터 ID(\`{id}\`)와 레퍼런스 이미지를 통해 일관성을 유지합니다. 프롬프트에는 캐릭터의 행동, 감정, 위치 등 **상황적 묘사**에 집중합니다.
-        *   **[규칙 2] 서사적 외형 변화 대응 (Situational Override):** 만약 현재 uriStory에서 캐릭터의 외형이 기본 상태(\`visualKeywords\`)와 다르게 묘사된다면(예: 변장, 부상), 프롬프트에 그 **변화된 모습을 구체적으로 명시해야 합니다.** 이는 urivisualKeywords보다 우선합니다.
-        *   **[규칙 3] 네거티브 프롬프트 충돌 방지 (Negative Prompt Failsafe):** 프롬프트에 포함된 모든 캐릭터의 urivisualKeywords에 있는 단어는 urinegative_prompt에 절대 포함시켜서는 안 됩니다.
-        *   **[규칙 4] 다인원 장면 구성 (Composition for Multiple Characters):** 2명 이상의 캐릭터가 한 장면에 등장할 경우, **각 캐릭터의 위치와 행동을 반드시 개별 문장으로 분리하여 명확하게 묘사해야 합니다.** (예: uriIn the courtyard, {id1} is looking up at the sky. Nearby, {id2} is examining a pillar. {id3} stands apart, watching the guards.uri) 이는 이미지 모델의 '특징 혼합' 오류를 방지하기 위한 가장 중요한 규칙입니다.
+        *   **[규칙 2] 서사적 외형 변화 대응 (Situational Override):** 만약 현재 \`uriStory\`에서 캐릭터의 외형이 기본 상태(\`visualKeywords\`)와 다르게 묘사된다면(예: 변장, 부상), 프롬프트에 그 **변화된 모습을 구체적으로 명시해야 합니다.** 이는 \`urivisualKeywords\`보다 우선합니다.
+        *   **[규칙 3] 네거티브 프롬프트 충돌 방지 (Negative Prompt Failsafe):** 프롬프트에 포함된 모든 캐릭터의 \`urivisualKeywords\`에 있는 단어는 \`urinegative_prompt\`에 절대 포함시켜서는 안 됩니다.
+        *   **[규칙 4] 다인원 장면 구성 (Composition for Multiple Characters):** 2명 이상의 캐릭터가 한 장면에 등장할 경우, **각 캐릭터의 위치와 행동을 반드시 개별 문장으로 분리하여 명확하게 묘사해야 합니다.** (예: \`uriIn the courtyard, {id1} is looking up at the sky. Nearby, {id2} is examining a pillar. {id3} stands apart, watching the guards.\`uri) 이는 이미지 모델의 '특징 혼합' 오류를 방지하기 위한 가장 중요한 규칙입니다.
 6.  **선택지 구상:** 이야기가 끝난 후 플레이어가 선택할 수 있는 각기 다른 테마의 흥미로운 국면 3가지를 디자인합니다.
 
 #2: JSON 출력 형식 (절대 준수)
@@ -213,7 +198,3 @@ export const unifiedCoTSystemPrompt = `당신은 천재적인 스토리텔링 AI
 - **story, hints, choices 필드에서는 반드시 캐릭터의 'name'(예: "엘라라")을 사용하세요.**
 - **assetPipeline의 prompt 필드에서는 반드시 캐릭터의 'id'(예: "{char_elara}")를 사용해야 합니다.**
 - 이 규칙은 절대적입니다.
-`;
-
-// 이미지 생성 시 기본적으로 제외할 키워드
-export const NEGATIVE_PROMPT_KEYWORDS = 'text, words, letters, font, signature, watermark, poorly drawn, blurry, ugly';
