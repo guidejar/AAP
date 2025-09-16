@@ -1,429 +1,160 @@
 /**
- * 파일명: main.js
- * 목적: 애플리케이션의 메인 로직, 게임 흐름 제어, 이벤트 리스너 등록을 담당합니다. (v4 아키텍처)
+ * 파일명: config.js
+ * 목적: AI 모델에 전달될 시스템 프롬프트와 주요 설정 상수를 정의합니다.
  * 작성일: 2025-09-14
  * 
  * === 변경 히스토리 ===
- * 2025-09-14 14:11 - 초기 생성: VV3.md의 핵심 로직과 이벤트 리스너 통합
- * 2025-09-14 14:40 - v4 아키텍처 리팩토링: 2-API 호출, DAD 스냅샷, 작업 큐 로직 적용
- * 2025-09-16 13:50 - 사용자 요구사항에 맞춰 API 재시도 및 오류 처리 로직 전면 개편
- * 2025-09-16 14:00 - 사용자 설계안에 맞춰 이미지 생성(processTask) 로직 전면 재설계
- * 2025-09-16 14:20 - UX 개선: 1차 API 완료 후 즉시 렌더링 및 백그라운드 처리 로직 도입
+ * 2025-09-14 14:05 - 초기 생성: VV3.md에서 설정 부분 분리
+ * 2025-09-14 14:30 - v4 아키텍처 리팩토링: 2-API 구조에 맞게 프롬프트 전면 개편
+ * 2025-09-16 15:20 - 데이터 언어를 영문으로 통일하기 위해 모든 시스템 프롬프트 수정
  * =====================
  */
 
-import * as dom from './dom.js';
-import * as state from './state.js';
-import * as cfg from './config.js';
-import * as ui from './ui.js';
-import * as api from './api.js';
-import * as utils from './utils.js';
+// --- v4 System Prompts ---
 
-// --- SECTION: 핵심 게임 흐름 (Orchestrator) (v4) ---
+export const worldBuilderSystemPrompt = `You are a genius 'World Builder' AI. Your mission is to design the entire framework of an adventure based on user input and output the result as a **single, perfect JSON object**. Your output must be ONLY JSON, with no other text.
 
-async function startGame() {
-    try {
-        const genre = dom.genreInput.value;
-        const adventure = dom.adventureInput.value;
-        if (!genre || !adventure) {
-            alert('장르와 모험 내용을 모두 입력해주세요.');
-            return;
-        }
-
-        ui.showPageLoader("세계관 구성 중...");
-        const worldBuildContext = [{ role: "user", parts: [{ text: `장르: ${genre}\n모험: ${adventure}` }] }];
-        
-        const briefJsonResponse = await api.callGenerativeAPI(worldBuildContext, cfg.worldBuilderSystemPrompt, !!state.userApiKey);
-        
-        if (!briefJsonResponse) throw new Error("캠페인 생성 AI로부터 응답을 받지 못했습니다.");
-
-        const initialDadSnapshot = utils.parseCampaignBrief(briefJsonResponse);
-        initialDadSnapshot.genre = genre;
-        initialDadSnapshot.adventure = adventure;
-        state.setInitialDadSnapshot(initialDadSnapshot);
-
-        dom.setupScreen.classList.add('hidden');
-        dom.storyScreen.classList.remove('hidden');
-        dom.storyScreen.classList.add('grid');
-
-        await processTurn(`모험이 시작됩니다. 당신은 방금 생성된 세계관에 따라 이야기를 진행해야 합니다. 주인공을 '새로운 핵심 인물'로서 생성하고, 모험을 시작하는 첫 번째 장면을 완성해주세요.`, true);
-
-    } catch (error) {
-        console.error("Game start error:", error);
-        
-        if (error instanceof api.ApiError && !state.userApiKey) {
-            alert("API 호출 중 오류가 발생했습니다. 내부 API 사용량이 소진되었을 수 있습니다. 설정 메뉴를 열어 API 키를 입력해주세요.");
-            dom.settingsModal.classList.remove('hidden');
-        } else {
-            alert(error.message || "게임 시작 중 오류가 발생했습니다.");
-        }
-
-        dom.setupScreen.classList.remove('hidden');
-        dom.storyScreen.classList.add('hidden');
-    } finally {
-        ui.hidePageLoader();
+# JSON Output Schema (MUST be strictly adhered to)
+# IMPORTANT: All string values in the JSON output MUST be in ENGLISH.
+{
+  "plotSummary": "A summary of the entire story plot, including the flow from beginning to end. MUST be in ENGLISH.",
+  "keyCharacters": [
+    {
+      "id": "A unique identifier for the character (lowercase, snake_case, e.g., 'elara_stormwind')",
+      "name": "Character's name. MUST be in ENGLISH.",
+      "description": "Narrative information about the character's personality, background, etc. MUST be in ENGLISH.",
+      "visualKeywords": "A set of core **English** keywords that define the character's appearance and basic attire. Comma-separated.",
+      "size": "A simple description of the character's height or build (e.g., '175cm, medium build')"
     }
-}
-
-async function handleUserInput(e) {
-    if (e) e.preventDefault();
-    const text = dom.userInput.value.trim();
-    if (!text || state.isGenerating) return;
-
-    if (state.isBranchingActive) {
-        await handleBranching(state.currentSceneIndex, text);
-        return;
+  ],
+  "keyLocations": [
+    {
+      "id": "unique_location_id",
+      "name": "Location name. MUST be in ENGLISH.",
+      "description": "Location description. MUST be in ENGLISH.",
+      "visualKeywords": "English keywords for the location's appearance."
     }
-
-    dom.userInput.value = '';
-    dom.userInput.style.height = 'auto';
-    ui.clearChoices();
-    await processTurn(text);
-}
-
-async function handleBranching(branchIndex, userChoice) {
-    state.setSceneArchive(state.sceneArchive.slice(0, branchIndex + 1));
-    state.setCurrentSceneIndex(branchIndex);
-    state.setIsBranchingActive(false);
-    dom.userInput.placeholder = "다음 행동을 입력하세요... (Enter: 전송, Shift+Enter: 줄바꿈)";
-
-    dom.userInput.value = '';
-    dom.userInput.style.height = 'auto';
-    ui.clearChoices();
-    await processTurn(userChoice);
-}
-
-export async function processTurn(userText, isFirstScene = false) {
-    state.setIsGenerating(true);
-    ui.updateGlobalLoadingState();
-
-    try {
-        const previousDadSnapshot = isFirstScene ? state.initialDadSnapshot : state.sceneArchive[state.currentSceneIndex].dadSnapshot;
-
-        const storyContext = buildStoryContext(userText, previousDadSnapshot);
-        const storyResponse = await api.callGenerativeAPI(storyContext, cfg.storyGeneratorSystemPrompt, !!state.userApiKey);
-        if (!storyResponse) throw new Error("1차 API(서사 생성)로부터 응답을 받지 못했습니다.");
-        const { title, story } = utils.parseModelResponse(storyResponse);
-        
-        if (isFirstScene) ui.hidePageLoader();
-
-        const tempSceneData = {
-            user_input: userText,
-            title,
-            story,
-            isComplete: false,
-            dadSnapshot: previousDadSnapshot,
-        };
-
-        if (state.currentSceneIndex < state.sceneArchive.length - 1) {
-            state.setSceneArchive(state.sceneArchive.slice(0, state.currentSceneIndex + 1));
-        }
-        state.sceneArchive.push(tempSceneData);
-        state.setCurrentSceneIndex(state.sceneArchive.length - 1);
-        
-        ui.renderScene(state.currentSceneIndex);
-
-        finishSceneGeneration(state.currentSceneIndex, previousDadSnapshot, story, storyResponse);
-
-    } catch (error) {
-        console.error("Turn processing error:", error);
-        state.setIsGenerating(false);
-        ui.updateGlobalLoadingState();
-        
-        if (error instanceof api.ApiError && !state.userApiKey) {
-            alert("API 호출 중 오류가 발생했습니다. 내부 API 사용량이 소진되었을 수 있습니다. 설정 메뉴를 열어 API 키를 입력해주세요.");
-            dom.settingsModal.classList.remove('hidden');
-        } else {
-            alert(error.message || "오류가 발생했습니다.");
-        }
-
-        if (isFirstScene) {
-            dom.setupScreen.classList.remove('hidden');
-            dom.storyScreen.classList.add('hidden');
-        }
+  ],
+  "keyItems": [
+    {
+      "id": "unique_item_id",
+      "name": "Item name. MUST be in ENGLISH.",
+      "description": "Item description. MUST be in ENGLISH.",
+      "visualKeywords": "English keywords for the item's appearance."
     }
-}
-
-async function finishSceneGeneration(sceneIndex, previousDadSnapshot, story, storyResponse) {
-    try {
-        const analysisContext = buildAnalysisContext(story, previousDadSnapshot);
-        let analysisResponse;
-        try {
-            analysisResponse = await api.callGenerativeAPI(analysisContext, cfg.analysisSystemPrompt, false);
-        } catch (error) {
-            if (error instanceof api.ApiError && error.status === 429 && state.userApiKey) {
-                console.warn("내부 API(분석) 할당량 초과. API 키를 사용하여 재시도합니다.");
-                analysisResponse = await api.callGenerativeAPI(analysisContext, cfg.analysisSystemPrompt, true);
-            } else {
-                throw error;
-            }
-        }
-        if (!analysisResponse) throw new Error("2차 API(분석)로부터 응답을 받지 못했습니다.");
-        const analysisResult = utils.parseModelResponse(analysisResponse);
-
-        const newDadSnapshot = mergeDadSnapshot(previousDadSnapshot, analysisResult.newAssets);
-
-        await executeTaskQueue(analysisResult.taskQueue, newDadSnapshot);
-
-        const finalSceneData = {
-            ...state.sceneArchive[sceneIndex],
-            hints: analysisResult.hints,
-            choices: analysisResult.choices,
-            displayImageId: analysisResult.displayImageId,
-            dadSnapshot: newDadSnapshot,
-            raw_story_response: storyResponse,
-            raw_analysis_response: analysisResponse,
-            taskQueue: analysisResult.taskQueue,
-            isComplete: true,
-        };
-        state.sceneArchive[sceneIndex] = finalSceneData;
-
-    } catch (error) {
-        console.error("Background scene generation error:", error);
-        state.sceneArchive[sceneIndex].error = true;
-    } finally {
-        state.setIsGenerating(false);
-        if (state.currentSceneIndex === sceneIndex) {
-            ui.renderScene(sceneIndex);
-        }
-        ui.updateGlobalLoadingState();
+  ],
+  "keySkills": [
+    {
+      "id": "unique_skill_id",
+      "name": "Skill name. MUST be in ENGLISH.",
+      "description": "Skill description. MUST be in ENGLISH."
     }
+  ],
+  "artStyleKeywords": "A set of art style keywords to be consistently applied to all image prompts in the session. Comma-separated. MUST be in ENGLISH."
 }
+`;
 
-function buildStoryContext(currentUserAction, dadSnapshot) {
-    const narrativeContext = buildNarrativeContext();
-    return [
-        { role: "user", parts: [{ text: JSON.stringify({ dynamicAssetDatabase: dadSnapshot, narrativeContext, currentUserAction }) }] }
-    ];
+export const storyGeneratorSystemPrompt = `You are a genius narrative generation AI. Your mission is to create the **title and story for the next scene** based on the given world settings (dynamicAssetDatabase), the previous story (narrativeContext), and the user's action (currentUserAction). Your output must be ONLY a JSON object in the format below.
+
+# JSON Output Schema (MUST be strictly adhered to)
+# IMPORTANT: All string values in the JSON output MUST be in ENGLISH.
+{
+  "title": "The subtitle for the next scene. MUST be in ENGLISH.",
+  "story": "The next exciting story that reflects the consequences of the user's action. All characters must be referred to by their 'name'. MUST be in ENGLISH."
 }
+`;
 
-function buildAnalysisContext(storyForAnalysis, dadSnapshot) {
-    const recentStoryContext = state.sceneArchive.slice(-2).map(scene => scene.story);
-    return [
-        { role: "user", parts: [{ text: JSON.stringify({ dynamicAssetDatabase: dadSnapshot, storyForAnalysis, recentStoryContext }) }] }
-    ];
+export const analysisSystemPrompt = `You are a highly analytical AI planner. Your mission is to (1) analyze the latest story (storyForAnalysis), (2) identify changes by comparing it with the existing world state (dynamicAssetDatabase), and (3) generate a single, perfect JSON object containing all necessary data for the next turn.
+
+# CoT Process
+1.  **Evaluate Plausibility/Importance**: Rate how natural ('plausibility') and impactful ('importance') the 'storyForAnalysis' is on a scale of 1-5.
+2.  **Identify New Assets**: Find all new or significantly changed assets (characters, items, locations, skills) in 'storyForAnalysis' and add them to the 'newAssets' array. All text descriptions MUST be in ENGLISH.
+3.  **Create Task Queue**: Identify all image generation tasks needed for this turn and add them to the array in **strict execution order**. The 'prompt' for each task MUST be a detailed ENGLISH prompt for the image generation model.
+    - 	key_visual	: Defines the art style for the entire campaign. (Once per campaign, usually only for the first scene).
+    - 	3_view_reference	: Front/side/back reference sheet for a new asset.
+    - 	head_portrait	: Detailed close-up of a key character's face.
+    - 	illustration	: The final illustration depicting the current scene.
+4.  **Design Hints & Choices**: Based on 'storyForAnalysis', create useful hints for the player. Then, devise three interesting choices leading to different outcomes. For each hint and choice, provide both the original ENGLISH text and a KOREAN translation.
+
+# JSON Output Schema (MUST be strictly adhered to)
+{
+  "evaluation": { "plausibility": 5, "importance": 3 },
+  "newAssets": {
+    "keyCharacters": [ { "id": "...", "name": "...", "description": "...", "visualKeywords": "...", "size": "..." } ],
+    "keyItems": [ { "name": "...", "description": "...", "size": "..." } ],
+    "keyLocations": [], "keySkills": []
+  },
+  "taskQueue": [
+    { "type": "illustration", "assetId": "scene_01_illustration", "prompt": "A detailed English prompt for the scene..." }
+  ],
+  "hints": {
+      "characters": [ { "name": "Elara", "status": "Wounded", "tooltip": { "en": "She seems to be in pain.", "ko": "그녀는 고통스러워 보인다." } } ]
+  },
+  "choices": [
+      { "en": "Look for a healing potion.", "ko": "치유 물약을 찾아본다." },
+      { "en": "Ask her what happened.", "ko": "그녀에게 무슨 일이 있었는지 물어본다." },
+      { "en": "Ignore her and move on.", "ko": "그녀를 무시하고 갈 길을 간다." }
+  ],
+  "displayImageId": "The asset ID of the illustration to be displayed this turn (e.g., scene_01_illustration)"
 }
+`;
 
-function buildNarrativeContext() {
-    const shortTermMemoryCount = 4;
-    let history = [];
 
-    if (state.sceneArchive.length > 0) {
-        const longTermScenes = state.sceneArchive.slice(0, -shortTermMemoryCount);
-        const shortTermScenes = state.sceneArchive.slice(-shortTermMemoryCount);
+// --- v4 Image Prompt Templates ---
 
-        if (longTermScenes.length > 0) {
-            const longTermStorySummary = longTermScenes.map((scene, i) => `[SCENE ${i + 1} STORY]:\n${scene.story}`).join('\n\n');
-            history.push({ role: "user", parts: [{ text: `[LONG_TERM_MEMORY_SUMMARY]\n${longTermStorySummary}` }] });
-            history.push({ role: "model", parts: [{ text: "알겠습니다. 장기 기억(이전 이야기들)을 확인했습니다." }] });
-        }
+const globalImagePromptRules = {
+    center_placement: "Key characters and objects must be placed in the center of the image.",
+    ethics_policy: "The generated image must comply with the API's guidelines and ethics policy.",
+    negative_keywords: "The output must not include text, watermarks, letterboxes, or signatures."
+};
 
-        shortTermScenes.forEach(scene => {
-            history.push({ role: "user", parts: [{ text: scene.user_input }] });
-            if(scene.raw_analysis_response) history.push({ role: "model", parts: [{ text: scene.raw_analysis_response }] });
-        });
+export const promptTemplates = {
+    key_visual: {
+        role: "You are the Lead Art Director for this world.",
+        mission: "Read the provided campaign settings in their entirety. Your task is to create a single, representative image that visually encapsulates the core atmosphere and essence of this story.",
+        output_definition: "This is not a portrait of a specific character, but a piece of 'concept art' or 'promotional art' that defines the world's aesthetics. Freely combine characters, backgrounds, and hints of key events to create the most impactful composition.",
+        ...globalImagePromptRules
+    },
+    three_view_reference: {
+        role: "You are a Concept Artist creating a reference sheet for a new asset.",
+        style_directive: "Use the attached 'Key Visual' image as the absolute style guide. The final output must be rendered in the identical art style, color palette, and texture.",
+        format_directive: "Create a 3-view image that clearly shows the front, side, and back of the target asset.",
+        common_rules: "The background must be solid white. The asset must be in a neutral state or pose, without emotion.",
+        attachment_mapping: "Attachment 1 is the Key Visual for style reference.",
+        ...globalImagePromptRules
+    },
+    head_portrait: {
+        role: "You are a Character Portrait Artist.",
+        style_directive: "Maintain the identical style of the attached 'Key Visual' image.",
+        format_directive: "Create a close-up bust shot (head and shoulders) of the character, viewed from a 3/4 angle.",
+        detail_focus: "Focus on the facial details to clearly express the character's features and subtle expressions.",
+        attachment_mapping: "Attachment 1 is the Key Visual. Attachment 2 is the character's 3-view reference sheet.",
+        ...globalImagePromptRules
+    },
+    illustration: {
+        mission: "Create an illustration depicting the following scene.",
+        style_directive: "The overall art style must follow the attached 'Key Visual'. The specific appearance of each asset in the scene must be accurately depicted by referencing their individual attached reference sheets.",
+        size_directive: "Use the provided size information for each asset as a 'hint' to naturally represent the relative scale differences between them. (This is a guideline, not a strict mandate).",
+        situational_override: "The story description takes precedence over references (e.g., for disguises, injuries).",
+        composition_rule: "For multiple characters, describe each character's position and action in a separate sentence to prevent feature blending.",
+        ...globalImagePromptRules
     }
-    return history;
+};
+
+
+// 이야기의 흐름을 교정하는 '월드 픽서' AI의 시스템 프롬프트
+// (이 프롬프트는 현재 v4 아키텍처에서 직접 사용되지 않으므로, 필요 시 영문화 작업)
+export const worldFixerSystemPrompt = `당신은 이야기의 흐름을 교정하는 마스터 편집자, '월드 픽서' AI입니다. 당신의 임무는 주어진 기존 세계 설정(coreSettings)과 이야기 기록(sceneArchive)을 바탕으로, 사용자의 수정 요청(user_request)을 반영하여 세계관의 핵심 설정(coreSettings)만을 논리적으로 재구성하는 것입니다. 당신의 출력은 반드시 수정된 **핵심 설정 데이터**를 담은 단 하나의 JSON 객체여야 합니다.
+
+# JSON 출력 스키마 (절대 준수)
+{
+  "updatedCoreSettings": {
+    "plotSummary": "...",
+    "keyCharacters": [ { "id": "...", "name": "...", "description": "...", "visualKeywords": "..." } ],
+    "keyLocations": [ ... ],
+    "keyItems": [ ... ],
+    "keySkills": [ ... ],
+    "artStyleKeywords": "..."
+  }
 }
-
-function mergeDadSnapshot(previousSnapshot, newAssets) {
-    const newSnapshot = JSON.parse(JSON.stringify(previousSnapshot));
-    if (!newAssets) return newSnapshot;
-
-    const merge = (targetArray, sourceArray) => {
-        if (!sourceArray || !Array.isArray(sourceArray)) return;
-        sourceArray.forEach(newItem => {
-            const existingIndex = targetArray.findIndex(item => item.id === newItem.id);
-            if (existingIndex > -1) {
-                targetArray[existingIndex] = { ...targetArray[existingIndex], ...newItem };
-            } else {
-                targetArray.push(newItem);
-            }
-        });
-    };
-
-    merge(newSnapshot.keyCharacters, newAssets.keyCharacters);
-    merge(newSnapshot.keyItems, newAssets.keyItems);
-    merge(newSnapshot.keyLocations, newAssets.keyLocations);
-    merge(newSnapshot.keySkills, newAssets.keySkills);
-
-    return newSnapshot;
-}
-
-async function executeTaskQueue(taskQueue, dadSnapshot) {
-    if (!taskQueue || taskQueue.length === 0) return;
-
-    const keyVisualTask = taskQueue.find(t => t.type === 'key_visual');
-    if (keyVisualTask && !state.imageCache.has(keyVisualTask.assetId)) {
-        await processTask(keyVisualTask, dadSnapshot);
-    }
-
-    for (const task of taskQueue) {
-        if (task.type !== 'key_visual') {
-            const imageCacheKey = `${task.assetId}_${task.type}`;
-            if (!state.imageCache.has(imageCacheKey)) {
-                await processTask(task, dadSnapshot);
-            }
-        }
-    }
-}
-
-async function processTask(task, dadSnapshot) {
-    const imageCacheKey = task.type === 'key_visual' ? task.assetId : `${task.assetId}_${task.type}`;
-    
-    // 이 부분은 ui.js로 옮겨져야 할 수 있습니다.
-    // dom.imageLoader.classList.remove('hidden');
-    // dom.imageLoaderText.textContent = `에셋 생성 중: ${task.assetId} (${task.type})`;
-
-    const promptTemplate = cfg.promptTemplates[task.type];
-    if (!promptTemplate) {
-        console.warn(`알 수 없는 작업 유형: ${task.type}`);
-        return;
-    }
-
-    let promptData = { ...promptTemplate };
-    const referenceImages = [];
-    
-    switch (task.type) {
-        case 'key_visual':
-            promptData.data_payload = dadSnapshot;
-            break;
-
-        case '3_view_reference':
-            promptData.data_payload = dadSnapshot.keyCharacters.find(c => c.id === task.assetId) || dadSnapshot.keyItems.find(i => i.id === task.assetId) || {};
-            if (state.imageCache.has('campaign_key_visual')) {
-                referenceImages.push({ id: 'campaign_key_visual', base64Data: state.imageCache.get('campaign_key_visual').split(',')[1] });
-            }
-            break;
-
-        case 'head_portrait':
-            promptData.data_payload = dadSnapshot.keyCharacters.find(c => c.id === task.assetId) || {};
-            if (state.imageCache.has('campaign_key_visual')) {
-                referenceImages.push({ id: 'campaign_key_visual', base64Data: state.imageCache.get('campaign_key_visual').split(',')[1] });
-            }
-            const threeViewCacheKey = `${task.assetId}_3_view_reference`;
-            if (state.imageCache.has(threeViewCacheKey)) {
-                 referenceImages.push({ id: threeViewCacheKey, base64Data: state.imageCache.get(threeViewCacheKey).split(',')[1] });
-            }
-            break;
-
-        case 'illustration':
-            promptData.scene_text_payload = state.sceneArchive[state.currentSceneIndex].story;
-            promptData.data_payload = { dadSnapshot };
-            
-            if (state.imageCache.has('campaign_key_visual')) {
-                 referenceImages.push({ id: 'campaign_key_visual', base64Data: state.imageCache.get('campaign_key_visual').split(',')[1] });
-            }
-
-            const currentTaskQueue = state.sceneArchive[state.currentSceneIndex].taskQueue || [];
-            currentTaskQueue.forEach(t => {
-                const assetCacheKey = `${t.assetId}_${t.type}`;
-                if (t.type === '3_view_reference' && state.imageCache.has(assetCacheKey)) {
-                    referenceImages.push({ id: assetCacheKey, base64Data: state.imageCache.get(assetCacheKey).split(',')[1] });
-                }
-            });
-            break;
-    }
-
-    try {
-        let imageUrl = await api.callImageAPI(promptData, referenceImages, false);
-        state.imageCache.set(imageCacheKey, imageUrl);
-    } catch (error) {
-        if (error instanceof api.ApiError && error.status === 429 && state.userApiKey) {
-            console.warn(`내부 이미지 API 할당량 초과 (${task.assetId}). API 키를 사용하여 재시도합니다.`);
-            try {
-                const imageUrl = await api.callImageAPI(promptData, referenceImages, true);
-                state.imageCache.set(imageCacheKey, imageUrl);
-            } catch (retryError) {
-                 console.error(`Image API retry failed for task: ${task.assetId}`, retryError);
-                 state.imageCache.set(imageCacheKey, "https://placehold.co/1200x1800/ff0000/FFF?text=Gen+Failed");
-            }
-        } else {
-            console.error(`Failed to generate image for task: ${task.assetId}`, error);
-            state.imageCache.set(imageCacheKey, "https://placehold.co/1200x1800/ff0000/FFF?text=Gen+Failed");
-            if (error instanceof api.ApiError && !state.userApiKey) {
-                 alert("이미지 생성 중 오류가 발생했습니다. 내부 API 사용량이 소진되었을 수 있습니다. 설정에서 API 키를 입력하시면 계속할 수 있습니다.");
-                 dom.settingsModal.classList.remove('hidden');
-            }
-        }
-    }
-}
-
-
-// --- SECTION: 이벤트 리스너 등록 (v4) ---
-
-function initializeEventListeners() {
-    dom.startBtn.addEventListener('click', startGame);
-    dom.loadBtn.addEventListener('click', () => dom.loadInput.click());
-    dom.loadInput.addEventListener('change', utils.handleFileLoad);
-
-    dom.prevBtn.addEventListener('click', () => { if (state.currentSceneIndex > 0) ui.renderScene(state.currentSceneIndex - 1); });
-    dom.nextBtn.addEventListener('click', () => { if (state.currentSceneIndex < state.sceneArchive.length - 1) ui.renderScene(state.currentSceneIndex + 1); });
-
-    dom.storyForm.addEventListener('submit', handleUserInput);
-    dom.userInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); dom.storyForm.dispatchEvent(new Event('submit')); } });
-    dom.userInput.addEventListener('input', () => { dom.userInput.style.height = 'auto'; dom.userInput.style.height = (dom.userInput.scrollHeight) + 'px'; });
-    dom.userInput.addEventListener('focus', () => dom.inputPanel.classList.add('focused'));
-    dom.userInput.addEventListener('blur', () => dom.inputPanel.classList.remove('focused'));
-
-    dom.settingsBtnFloating.addEventListener('click', () => dom.settingsModal.classList.remove('hidden'));
-    dom.closeSettingsBtn.addEventListener('click', () => dom.settingsModal.classList.add('hidden'));
-    dom.debugCheckbox.addEventListener('change', () => {
-        state.setIsDebugMode(dom.debugCheckbox.checked);
-        if (state.currentSceneIndex >= 0) ui.toggleDebugView(state.isDebugMode);
-    });
-    dom.saveBtn.addEventListener('click', utils.saveStory);
-    dom.loadModalBtn.addEventListener('click', () => { dom.loadInput.click(); dom.settingsModal.classList.add('hidden'); });
-
-    const syncApiKeys = (e) => {
-        state.setUserApiKey(e.target.value);
-        dom.apiKeyModalInput.value = state.userApiKey;
-        dom.apiKeySetupInput.value = state.userApiKey;
-    };
-    dom.apiKeySetupInput.addEventListener('input', syncApiKeys);
-    dom.apiKeyModalInput.addEventListener('input', syncApiKeys);
-
-    dom.branchBtn.addEventListener('click', () => {
-        state.setIsBranchingActive(true);
-        ui.renderScene(state.currentSceneIndex); // Re-render to activate choices
-        dom.userInput.placeholder = "다른 선택지를 고르거나, 새로운 행동을 입력하세요.";
-    });
-
-    const closeImageViewer = () => dom.imageViewerModal.classList.add('hidden');
-    dom.closeImageViewerBtn.addEventListener('click', closeImageViewer);
-    dom.imageViewerModal.addEventListener('click', (e) => {
-        if (e.target.id === 'image-viewer-modal') closeImageViewer();
-    });
-
-    window.addEventListener('keydown', (e) => {
-        const isModalOpen = !dom.settingsModal.classList.contains('hidden');
-        const isInputFocused = document.activeElement === dom.userInput;
-
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            if (!dom.imageViewerModal.classList.contains('hidden')) {
-                closeImageViewer();
-            } else if (state.isBranchingActive) {
-                state.setIsBranchingActive(false);
-                ui.renderScene(state.currentSceneIndex);
-            } else {
-                dom.settingsModal.classList.toggle('hidden');
-            }
-        }
-
-        if (isInputFocused || isModalOpen) return;
-
-        if (e.key === 'ArrowLeft') { dom.prevBtn.click(); }
-        if (e.key === 'ArrowRight') { dom.nextBtn.click(); }
-
-        if (e.key === 'ArrowUp') { document.querySelector('#story-panel .flex-grow').scrollBy(0, -50); }
-        if (e.key === 'ArrowDown') { document.querySelector('#story-panel .flex-grow').scrollBy(0, 50); }
-
-        if (e.ctrlKey && e.key === 'ArrowDown') { e.preventDefault(); dom.userInput.focus(); }
-        if (e.ctrlKey && e.key === 'ArrowUp') { e.preventDefault(); dom.prevBtn.focus(); }
-    });
-}
-
-// --- SECTION: 애플리케이션 초기화 ---
-
-window.addEventListener('DOMContentLoaded', initializeEventListeners);
+`;
