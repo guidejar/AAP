@@ -385,12 +385,8 @@ function initializeEventListeners() {
 
     dom.branchBtn.addEventListener('click', () => {
         state.setIsBranchingActive(true);
-        dom.pastActionContainer.classList.add('hidden');
-        dom.branchBtn.classList.add('hidden');
-        dom.inputContainer.classList.remove('hidden');
-        ui.toggleInput(false);
-        dom.userInput.placeholder = "이후 모든 내용이 삭제됩니다. 원치 않는다면 ESC를 눌러 설정을 열고 저장하세요.";
-        dom.userInput.focus();
+        ui.renderScene(state.currentSceneIndex); // Re-render to activate choices
+        dom.userInput.placeholder = "다른 선택지를 고르거나, 새로운 행동을 입력하세요.";
     });
 
     const closeImageViewer = () => dom.imageViewerModal.classList.add('hidden');
