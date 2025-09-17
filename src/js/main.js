@@ -18,6 +18,7 @@ import * as cfg from './config.js';
 import * as ui from './ui.js';
 import * as api from './api.js';
 import * as utils from './utils.js';
+import * as inputHandler from './input-handler.js';
 
 // --- SECTION: 핵심 게임 흐름 (Orchestrator) (v4) ---
 
@@ -353,6 +354,7 @@ async function processTask(task, dadSnapshot) {
 // --- SECTION: 이벤트 리스너 등록 (v4) ---
 
 function initializeEventListeners() {
+    inputHandler.initializeInputHandler();
     dom.startBtn.addEventListener('click', startGame);
     dom.loadBtn.addEventListener('click', () => dom.loadInput.click());
     dom.loadInput.addEventListener('change', utils.handleFileLoad);
@@ -366,7 +368,6 @@ function initializeEventListeners() {
     dom.userInput.addEventListener('focus', () => dom.inputPanel.classList.add('focused'));
     dom.userInput.addEventListener('blur', () => dom.inputPanel.classList.remove('focused'));
 
-    dom.settingsBtnFloating.addEventListener('click', () => dom.settingsModal.classList.remove('hidden'));
     dom.closeSettingsBtn.addEventListener('click', () => dom.settingsModal.classList.add('hidden'));
     dom.debugCheckbox.addEventListener('change', () => {
         state.setIsDebugMode(dom.debugCheckbox.checked);
