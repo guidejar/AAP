@@ -49,7 +49,7 @@ export const pastActionText = document.getElementById('past-action-text');
 export const branchBtn = document.getElementById('branch-btn');
 
 // 입력창 관련 요소
-export const inputPanel = document.querySelector('.input-panel');
+export const inputPanel = document.getElementById('input-container');
 export const userInput = document.getElementById('user-input');
 export const storyForm = document.getElementById('story-form');
 export const sendBtn = document.getElementById('send-btn');
