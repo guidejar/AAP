@@ -4,17 +4,12 @@
  * 작성일: 2025-09-14
  * 
  * === 변경 히스토리 ===
- * 2025-09-14 14:08 - 초기 생성: VV3.md에서 UI 관련 로직 분리
- * 2025-09-14 14:55 - v4 리팩토링: DAD 스냅샷 및 새로운 scene 객체 구조에 맞게 렌더링 함수 수정
- * 2025-09-16 14:30 - UX 개선: 즉시 렌더링 및 전역 로딩 상태 UI 로직 추가
- * 2025-09-16 14:55 - 버그 수정: 과거 장면 조회 시, 해당 장면에 맞는 선택지가 표시되도록 수정
- * 2025-09-16 15:10 - 분기(branching) 기능 UX 개선: 과거 장면에서 선택지 활성화 로직 구현
+ * 2025-09-17 - v4 레이아웃 리팩토링: 새로운 DOM 구조에 맞게 UI 로직 전면 개편
  * =====================
  */
 
 import * as dom from './dom.js';
 import * as state from './state.js';
-import { processTurn } from './main.js';
 
 /**
  * 특정 장면(scene)을 화면에 렌더링하는 함수
@@ -39,12 +34,11 @@ export function renderScene(index) {
             }, 300);
         }
         dom.imageLoader.classList.add('hidden');
-        renderHintPanel(scene.hints);
+        // renderHintPanel is removed, hints are now in the toolbar.
         renderChoices(scene.choices, (isLatestScene || state.isBranchingActive) && !state.isGenerating);
     } else {
         dom.imageLoader.classList.remove('hidden');
         dom.imageLoaderText.textContent = "새로운 삽화 생성 중...";
-        dom.hintPanel.innerHTML = '<div class="text-center text-gray-400 p-8">장면 분석 중...</div>';
         clearChoices();
     }
 
@@ -56,16 +50,6 @@ export function renderScene(index) {
  * 현재 씬 상태에 따라 UI의 각 부분을 업데이트하는 함수
  */
 function updateUiState(isLatestScene) {
-    const isBranching = state.isBranchingActive;
-
-    dom.inputContainer.classList.toggle('hidden', !isLatestScene && !isBranching);
-    dom.pastActionContainer.classList.toggle('hidden', isLatestScene || isBranching);
-    dom.branchBtn.classList.toggle('hidden', isLatestScene || isBranching);
-
-    if (!isLatestScene && !isBranching) {
-        dom.pastActionText.textContent = state.sceneArchive[state.currentSceneIndex + 1]?.user_input || '';
-    }
-
     dom.prevBtn.disabled = state.currentSceneIndex === 0;
     dom.nextBtn.disabled = isLatestScene;
 
@@ -77,85 +61,22 @@ function updateUiState(isLatestScene) {
  */
 export function updateGlobalLoadingState() {
     const isLatestScene = state.currentSceneIndex === state.sceneArchive.length - 1;
-    const isBranching = state.isBranchingActive;
+    const isBranching = state.isBranchingActive; // This state needs to be handled by a new branching button logic
 
     if (state.isGenerating && isLatestScene) {
         dom.inputLoader.classList.remove('hidden');
-        dom.inputContainer.classList.add('hidden');
+        dom.storyForm.classList.add('hidden');
         dom.inputLoaderText.textContent = "장면 생성 중...";
         toggleInput(true);
     } else {
         dom.inputLoader.classList.add('hidden');
+        dom.storyForm.classList.remove('hidden');
         const shouldBeInteractive = (isLatestScene || isBranching) && !state.isGenerating;
         toggleInput(!shouldBeInteractive);
         if (shouldBeInteractive) {
             dom.userInput.focus();
         }
     }
-}
-
-function renderHintPanel(hints) {
-    dom.hintPanel.innerHTML = '';
-    if (!hints) return;
-
-    let finalHtml = '';
-    const enabledItemClasses = 'bg-gray-700/80 border-gray-600 hover:bg-gray-600 hover:border-gray-500 cursor-pointer';
-    const disabledItemClasses = 'bg-gray-800/60 border-gray-700/50 text-gray-500 cursor-default';
-    const infoItemClasses = 'bg-gray-700/40 border-gray-600 text-gray-300 cursor-default';
-
-    if (hints.characters && hints.characters.length > 0) {
-        finalHtml += `
-            <div>
-                <h3 class="font-bold text-xl mb-3 border-b border-gray-700 pb-2">캐릭터</h3>
-                <div class="flex flex-wrap gap-2">
-                    ${hints.characters.map(item => `
-                        <span class="js-tooltip-trigger ${infoItemClasses}" data-tooltip="${item.tooltip || '정보 없음'}">
-                            <span class="font-semibold text-white">${item.name || 'N/A'}</span>: ${item.status || ''}
-                        </span>
-                    `).join('')}
-                </div>
-            </div>`;
-    }
-
-    const createHintSection = (title, items, category) => {
-        if (!items || items.length === 0) return '';
-        return `
-            <div class="mt-6">
-                <h3 class="font-bold text-xl mb-3 border-b border-gray-700 pb-2">${title}</h3>
-                <div class="flex flex-wrap gap-2">
-                    ${items.map(item => `
-                        <span class="js-tooltip-trigger ${item.usable ? enabledItemClasses : disabledItemClasses}" data-tooltip="${item.tooltip || '정보 없음'}">
-                            ${item.name || 'N/A'}
-                            ${category === 'skills' && item.owner ? ` <span class="text-xs opacity-70">(${item.owner})</span>` : ''}
-                        </span>
-                    `).join('')}
-                </div>
-            </div>`;
-    };
-    
-    finalHtml += createHintSection('스킬', hints.skills, 'skills');
-    finalHtml += createHintSection('인벤토리', hints.inventory, 'inventory');
-
-    dom.hintPanel.innerHTML = finalHtml;
-    setupTooltipListeners();
-}
-
-function setupTooltipListeners() {
-    const tooltipTriggers = document.querySelectorAll('.js-tooltip-trigger');
-    tooltipTriggers.forEach(trigger => {
-        trigger.addEventListener('mouseover', (e) => {
-            const tooltipText = e.currentTarget.dataset.tooltip;
-            dom.globalTooltip.textContent = tooltipText;
-            dom.globalTooltip.classList.add('visible');
-        });
-        trigger.addEventListener('mousemove', (e) => {
-            dom.globalTooltip.style.left = `${e.clientX + 15}px`;
-            dom.globalTooltip.style.top = `${e.clientY + 15}px`;
-        });
-        trigger.addEventListener('mouseout', () => {
-            dom.globalTooltip.classList.remove('visible');
-        });
-    });
 }
 
 export function showPageLoader(text) { 
@@ -167,6 +88,10 @@ export function hidePageLoader() {
     dom.pageLoader.classList.add('hidden'); 
 }
 
+/**
+ * 선택지를 렌더링하는 함수.
+ * 클릭 시 입력창에 텍스트를 채워넣습니다.
+ */
 function renderChoices(choices, areClickable = true) {
     clearChoices();
     if (!choices || choices.length === 0) return;
@@ -177,8 +102,12 @@ function renderChoices(choices, areClickable = true) {
         
         if (areClickable) {
             button.className = "bg-indigo-500/60 hover:bg-indigo-500 text-white font-semibold py-1 px-3 rounded-full text-sm transition-colors";
-            button.onclick = async () => {
-                await processTurn(choiceText);
+            button.onclick = () => {
+                dom.userInput.value = choiceText;
+                dom.userInput.focus();
+                // Auto-resize textarea after populating
+                const event = new Event('input', { bubbles: true });
+                dom.userInput.dispatchEvent(event);
             };
         } else {
             button.className = "bg-gray-700/50 text-gray-400 font-semibold py-1 px-3 rounded-full text-sm cursor-not-allowed";
@@ -203,9 +132,6 @@ export function toggleDebugView(show) {
     if (!scene) return;
 
     if (show) {
-        dom.promptOverlay.textContent = `[DISPLAY_IMAGE_ID]: ${scene.displayImageId || 'N/A'}`;
-        dom.promptOverlay.classList.remove('hidden');
-        
         dom.debugInputText.parentElement.querySelector('h4').textContent = 'DEBUG: 1차 API 응답 (서사)';
         dom.debugInputText.textContent = scene.raw_story_response || 'N/A';
         
@@ -234,7 +160,6 @@ export function toggleDebugView(show) {
         }
         dom.debugOutputContainer.classList.remove('hidden');
     } else {
-        dom.promptOverlay.classList.add('hidden');
         dom.debugOutputContainer.classList.add('hidden');
     }
 }

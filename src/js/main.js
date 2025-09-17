@@ -4,12 +4,7 @@
  * 작성일: 2025-09-14
  * 
  * === 변경 히스토리 ===
- * 2025-09-14 14:11 - 초기 생성: VV3.md의 핵심 로직과 이벤트 리스너 통합
- * 2025-09-14 14:40 - v4 아키텍처 리팩토링: 2-API 호출, DAD 스냅샷, 작업 큐 로직 적용
- * 2025-09-16 13:50 - 사용자 요구사항에 맞춰 API 재시도 및 오류 처리 로직 전면 개편
- * 2025-09-16 14:00 - 사용자 설계안에 맞춰 이미지 생성(processTask) 로직 전면 재설계
- * 2025-09-16 14:20 - UX 개선: 1차 API 완료 후 즉시 렌더링 및 백그라운드 처리 로직 도입
- * 2025-09-17 - 새로운 레이아웃에 맞게 입력 핸들러 초기화 추가
+ * 2025-09-17 - v4 레이아웃 리팩토링 완료 및 저장/불러오기 기능 연결
  * =====================
  */
 
@@ -46,7 +41,6 @@ async function startGame() {
 
         dom.setupScreen.classList.add('hidden');
         dom.storyScreen.classList.remove('hidden');
-        dom.storyScreen.classList.add('grid-new-layout');
 
         await processTurn(`모험이 시작됩니다. 당신은 방금 생성된 세계관에 따라 이야기를 진행해야 합니다. 주인공을 '새로운 핵심 등장인물'로 설정하고, 이 세계관에 어울리는 이름, 성별, 배경, 직업, 스킬, 초기 인벤토리를 부여하세요. 그리고 첫 번째 모험의 시작을 아주 흥미진진하게 묘사해주세요.`);
 
@@ -92,19 +86,32 @@ export async function processTurn(userInput) {
 // --- SECTION: 이벤트 리스너 초기화 ---
 
 function initializeEventListeners() {
+    // 시작 화면
     dom.startBtn.addEventListener('click', startGame);
+    dom.loadBtn.addEventListener('click', () => dom.loadInput.click());
+    dom.loadInput.addEventListener('change', utils.handleFileLoad);
+
+    // 스토리 화면
     dom.storyForm.addEventListener('submit', (e) => {
         e.preventDefault();
         if (dom.userInput.value.trim()) {
             processTurn(dom.userInput.value.trim());
             dom.userInput.value = '';
+            // 입력 후 텍스트창 높이 초기화
+            const event = new Event('input', { bubbles: true });
+            dom.userInput.dispatchEvent(event);
         }
     });
 
+    // 네비게이션
     dom.prevBtn.addEventListener('click', () => ui.renderScene(state.currentSceneIndex - 1));
     dom.nextBtn.addEventListener('click', () => ui.renderScene(state.currentSceneIndex + 1));
     
-    // 새로운 입력 핸들러 초기화
+    // 설정 모달 내 저장/불러오기
+    dom.saveBtn.addEventListener('click', utils.saveStory);
+    dom.loadModalBtn.addEventListener('click', () => dom.loadInput.click());
+
+    // 입력 및 툴바 핸들러 초기화
     initializeInputHandler();
 }
 

@@ -3,58 +3,94 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Novel Generator v4</title>
+    <title>AI 삽화 소설 생성기 v4</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="src/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-gray-900 text-white font-['Noto_Sans_KR']">
-    <!-- 페이지 로더 -->
-    <div id="page-loader" class="fixed inset-0 bg-gray-900 flex items-center justify-center z-50 hidden">
-        <div class="text-center">
-            <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-white mb-4"></div>
-            <p id="page-loader-text" class="text-lg">로딩 중...</p>
-        </div>
-    </div>
+<body class="bg-gray-900 text-gray-100 flex h-screen">
 
-    <!-- 설정 화면 -->
-    <div id="setup-screen" class="min-h-screen flex items-center justify-center p-8">
-        <div class="bg-gray-800 rounded-lg p-8 max-w-md w-full">
-            <h1 class="text-3xl font-bold mb-8 text-center">AI Novel Generator v4</h1>
-            
-            <div class="space-y-6">
-                <div>
-                    <label class="block text-sm font-medium mb-2">장르</label>
-                    <input id="genre-input" type="text" placeholder="예: 판타지, SF, 로맨스..." 
-                           class="w-full p-3 bg-gray-700 rounded-lg border border-gray-600 focus:border-blue-500">
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium mb-2">모험 설정</label>
-                    <textarea id="adventure-input" placeholder="어떤 모험을 시작하고 싶나요?" 
-                              class="w-full p-3 bg-gray-700 rounded-lg border border-gray-600 focus:border-blue-500 h-24 resize-none"></textarea>
-                </div>
-                
-                <div class="space-y-4">
-                    <input id="api-key-setup-input" type="password" placeholder="Gemini API 키 (선택 사항)" 
-                           class="w-full p-3 bg-gray-700 rounded-lg border border-gray-600 focus:border-blue-500">
-                    
-                    <div class="grid grid-cols-2 gap-4">
-                        <button id="load-btn" class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 rounded-lg">불러오기</button>
-                        <button id="start-btn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-lg">시작하기</button>
-                    </div>
-                </div>
+    <!-- 전역 로더 -->
+    <div id="page-loader" class="hidden fixed inset-0 bg-gray-900/90 backdrop-blur-sm flex flex-col items-center justify-center z-50">
+        <svg class="animate-spin h-12 w-12 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+        <p id="page-loader-text" class="mt-4 text-lg text-gray-400">모험을 준비하는 중...</p>
+    </div>
+    
+    <div id="global-tooltip" class="js-tooltip"></div>
+    <input type="file" id="load-input" class="hidden" accept=".json">
+
+    <!-- 시작 화면 -->
+    <div id="setup-screen" class="w-screen h-screen flex flex-col items-center justify-center text-center p-4">
+        <h1 class="text-4xl md:text-5xl font-bold mb-4">AI 삽화 소설 생성기</h1>
+        <p class="text-lg text-gray-400 mb-8">당신만의 이야기를 만들거나, 저장된 모험을 이어가세요.</p>
+        <div class="w-full max-w-lg space-y-4">
+            <input id="genre-input" type="text" placeholder="선호하는 작품이나 장르를 입력하세요." class="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <textarea id="adventure-input" placeholder="어떤 모험을 원하시나요?" class="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg h-24 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+            <input id="api-key-setup-input" type="password" placeholder="Gemini API 키 입력 (선택사항, 고품질 텍스트 생성용)" class="w-full p-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <div class="grid grid-cols-2 gap-4">
+                 <button id="load-btn" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300">이야기 불러오기</button>
+                <button id="start-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300">모험 시작하기</button>
             </div>
         </div>
     </div>
 
-    <!-- 메인 스토리 화면 (새로운 레이아웃) -->
-    <main id="story-screen" class="hidden h-screen">
-        <!-- 여기 내용이 동적으로 채워집니다. -->
-    </main>
-    
-    <!-- 설정 모달 -->
-    <div id="settings-modal" class="hidden fixed inset-0 z-50">
+    <!-- 메인 화면 (New Layout) -->
+    <div id="story-screen" class="hidden w-screen h-screen p-4">
+        <div class="left-column">
+            <div class="text-area">
+                <div class="flex items-center justify-between border-b border-gray-600 pb-4 mb-4">
+                    <button id="prev-btn" class="p-2 rounded-full hover:bg-gray-700 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/></svg></button>
+                    <h2 id="scene-title" class="text-2xl font-bold text-center">이야기 시작</h2>
+                    <button id="next-btn" class="p-2 rounded-full hover:bg-gray-700 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/></svg></button>
+                </div>
+                <div class="story-content-wrapper flex-grow overflow-y-auto pr-2">
+                    <p id="story-output" class="text-lg leading-relaxed">모험을 시작하려면 오른쪽 하단의 입력창에 원하는 내용을 입력하고 전송 버튼을 누르세요.</p>
+                    <div id="debug-output-container" class="hidden mt-4">
+                        <h4 class="font-bold text-sm text-yellow-400 border-t border-yellow-700 pt-2 mt-2">DEBUG: LLM INPUT</h4>
+                        <pre id="debug-input-text" class="bg-black/50 p-2 rounded text-xs font-mono whitespace-pre-wrap break-all"></pre>
+                        <h4 class="font-bold text-sm text-yellow-400 pt-2 mt-2">DEBUG: LLM RAW OUTPUT (JSON)</h4>
+                        <pre id="debug-output-text" class="bg-black/50 p-2 rounded text-xs font-mono whitespace-pre-wrap break-all"></pre>
+                        <h4 class="font-bold text-sm text-green-400 border-t border-green-700 pt-2 mt-2">DEBUG: PARSED ASSET PIPELINE</h4>
+                        <pre id="asset-pipeline-viewer" class="bg-black/50 p-2 rounded text-xs font-mono whitespace-pre-wrap break-all"></pre>
+                        <h4 class="font-bold text-sm text-cyan-400 border-t border-cyan-700 pt-2 mt-2">DEBUG: IMAGE CACHE</h4>
+                        <div id="image-cache-viewer" class="bg-black/50 p-2 rounded text-xs font-mono whitespace-pre-wrap break-all flex flex-col gap-1"></div>
+                    </div>
+                </div>
+                <div id="choice-container" class="pt-4 flex flex-wrap gap-2"></div>
+            </div>
+            <div class="input-section">
+                <div id="input-loader" class="hidden flex-col items-center justify-center h-full bg-gray-800/50 rounded-lg">
+                    <svg class="animate-spin h-8 w-8 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    <p id="input-loader-text" class="mt-2 text-sm text-gray-400">새로운 이야기를 생성하는 중...</p>
+                </div>
+                <form id="story-form" class="h-full flex flex-col gap-2">
+                    <textarea id="user-input" placeholder="다음 행동을 입력하세요... (Enter: 전송, Shift+Enter: 줄바꿈)" class="w-full p-3 bg-gray-800/80 border border-gray-600 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 flex-grow" rows="2" disabled></textarea>
+                    <div class="bottom-toolbar flex items-center justify-between">
+                        <div class="toolbar-icons flex gap-2">
+                            <button type="button" class="toolbar-btn p-2 rounded-full hover:bg-gray-700" data-action="inventory" title="인벤토리">🎒</button>
+                            <button type="button" class="toolbar-btn p-2 rounded-full hover:bg-gray-700" data-action="status" title="캐릭터 상태">📊</button>
+                            <button type="button" class="toolbar-btn p-2 rounded-full hover:bg-gray-700" data-action="skills" title="스킬">⚔️</button>
+                            <button type="button" class="toolbar-btn p-2 rounded-full hover:bg-gray-700" data-action="settings" title="설정">⚙️</button>
+                        </div>
+                        <button id="send-btn" type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300" disabled>전송</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div class="image-area relative flex items-center justify-center bg-black overflow-hidden">
+            <img id="story-illustration" src="https://placehold.co/1200x1800/000000/FFF?text=Ready?" alt="이야기 삽화" class="w-full h-full object-cover transition-opacity duration-500">
+            <div id="image-loader" class="loading-overlay hidden">
+                <div class="text-center">
+                    <svg class="animate-spin h-8 w-8 text-white mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    <p id="image-loader-text" class="mt-2 text-sm text-gray-400">새로운 삽화를 생성하는 중...</p>
+                </div>
+            </div>
+            <!-- The toolbar overlay will be dynamically added here by JS -->
+        </div>
+    </div>
+
+    <!-- 환경설정 모달 -->
+    <div id="settings-modal" class="hidden">
         <div class="modal-backdrop"></div>
         <div class="modal-content bg-gray-800 rounded-lg shadow-xl w-full max-w-md border border-gray-700">
             <div class="p-6 border-b border-gray-700 flex justify-between items-center">
@@ -63,13 +99,23 @@
             </div>
             <div class="p-6 space-y-6">
                 <div>
-                    <label for="api-key-modal-input" class="block mb-2 text-sm font-medium">Gemini API Key</label>
-                    <input type="password" id="api-key-modal-input" class="w-full p-3 bg-gray-700 rounded-lg">
+                    <label for="api-key-modal-input" class="block mb-2 text-sm font-medium text-gray-300">Gemini API Key (고급 텍스트용)</label>
+                    <input type="password" id="api-key-modal-input" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="API 키를 입력하세요">
                 </div>
                 <label class="flex items-center space-x-3 cursor-pointer">
-                    <input type="checkbox" id="debug-checkbox" class="h-5 w-5 text-indigo-600 bg-gray-700 rounded">
+                    <input type="checkbox" id="debug-checkbox" class="h-5 w-5 text-indigo-600 bg-gray-700 border-gray-600 rounded focus:ring-indigo-500">
                     <span class="text-lg">디버그 모드</span>
                 </label>
+                <div class="pt-4 border-t border-gray-700 text-sm text-gray-400">
+                    <h4 class="font-bold mb-2 text-gray-200">단축키 정보</h4>
+                    <ul class="list-disc list-inside space-y-1">
+                        <li><kbd class="font-sans bg-gray-700 p-1 rounded">ESC</kbd>: 설정 메뉴 열기/닫기</li>
+                        <li><kbd class="font-sans bg-gray-700 p-1 rounded">←</kbd> / <kbd class="font-sans bg-gray-700 p-1 rounded">→</kbd>: 이전/다음 페이지 이동</li>
+                        <li><kbd class="font-sans bg-gray-700 p-1 rounded">↑</kbd> / <kbd class="font-sans bg-gray-700 p-1 rounded">↓</kbd>: 이야기 텍스트 스크롤</li>
+                        <li><kbd class="font-sans bg-gray-700 p-1 rounded">Ctrl</kbd> + <kbd class="font-sans bg-gray-700 p-1 rounded">↓</kbd>: 입력창으로 포커스 이동</li>
+                        <li><kbd class="font-sans bg-gray-700 p-1 rounded">Ctrl</kbd> + <kbd class="font-sans bg-gray-700 p-1 rounded">↑</kbd>: 페이지 버튼으로 포커스 이동</li>
+                    </ul>
+                </div>
                 <div class="grid grid-cols-2 gap-4 pt-4 border-t border-gray-700">
                     <button id="save-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg">이야기 저장</button>
                     <button id="load-modal-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 rounded-lg">이야기 불러오기</button>
@@ -77,11 +123,12 @@
             </div>
         </div>
     </div>
+    
+    <div id="image-viewer-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[100] cursor-pointer">
+        <button id="close-image-viewer" class="absolute top-4 right-4 text-white text-5xl leading-none hover:text-gray-300">&times;</button>
+        <img id="modal-image-content" src="" class="max-w-[90vw] max-h-[90vh] object-contain cursor-default">
+    </div>
 
-    <!-- 툴팁 -->
-    <div id="global-tooltip" class="js-tooltip"></div>
-    <input type="file" id="load-input" class="hidden" accept=".json">
-
-    <script src="src/js/main.js" type="module"></script>
+    <script src="js/main.js" type="module"></script>
 </body>
 </html>
