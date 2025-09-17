@@ -18,7 +18,6 @@ import * as cfg from './config.js';
 import * as ui from './ui.js';
 import * as api from './api.js';
 import * as utils from './utils.js';
-import * as inputHandler from './input-handler.js';
 
 // --- SECTION: 핵심 게임 흐름 (Orchestrator) (v4) ---
 
@@ -251,6 +250,28 @@ function mergeDadSnapshot(previousSnapshot, newAssets) {
     return newSnapshot;
 }
 
+// 헬퍼 함수: 이미지 캐시 키 생성 (중복 방지)
+function generateImageCacheKey(assetId, type) {
+    if (type === 'key_visual') {
+        return assetId;
+    }
+
+    // assetId가 이미 타입을 포함하고 있는지 확인
+    const typePattern = new RegExp(`_${type}$`);
+    const cacheKey = typePattern.test(assetId) ? assetId : `${assetId}_${type}`;
+
+    // 캐릭터 에셋 타입 구분 강화 (A5 해결)
+    if (['3_view_reference', 'head_portrait'].includes(type)) {
+        // 캐릭터 관련 에셋은 항상 타입을 명시적으로 포함
+        const finalKey = typePattern.test(assetId) ? assetId : `${assetId}_${type}`;
+        console.log(`Character asset cache key: assetId="${assetId}", type="${type}" -> "${finalKey}"`);
+        return finalKey;
+    }
+
+    console.log(`Cache key generation: assetId="${assetId}", type="${type}" -> "${cacheKey}"`);
+    return cacheKey;
+}
+
 async function executeTaskQueue(taskQueue, dadSnapshot) {
     if (!taskQueue || taskQueue.length === 0) return;
 
@@ -261,7 +282,7 @@ async function executeTaskQueue(taskQueue, dadSnapshot) {
 
     for (const task of taskQueue) {
         if (task.type !== 'key_visual') {
-            const imageCacheKey = `${task.assetId}_${task.type}`;
+            const imageCacheKey = generateImageCacheKey(task.assetId, task.type);
             if (!state.imageCache.has(imageCacheKey)) {
                 await processTask(task, dadSnapshot);
             }
@@ -270,7 +291,7 @@ async function executeTaskQueue(taskQueue, dadSnapshot) {
 }
 
 async function processTask(task, dadSnapshot) {
-    const imageCacheKey = task.type === 'key_visual' ? task.assetId : `${task.assetId}_${task.type}`;
+    const imageCacheKey = generateImageCacheKey(task.assetId, task.type);
     
     // 이 부분은 ui.js로 옮겨져야 할 수 있습니다.
     // dom.imageLoader.classList.remove('hidden');
@@ -302,7 +323,7 @@ async function processTask(task, dadSnapshot) {
             if (state.imageCache.has('campaign_key_visual')) {
                 referenceImages.push({ id: 'campaign_key_visual', base64Data: state.imageCache.get('campaign_key_visual').split(',')[1] });
             }
-            const threeViewCacheKey = `${task.assetId}_3_view_reference`;
+            const threeViewCacheKey = generateImageCacheKey(task.assetId, '3_view_reference');
             if (state.imageCache.has(threeViewCacheKey)) {
                  referenceImages.push({ id: threeViewCacheKey, base64Data: state.imageCache.get(threeViewCacheKey).split(',')[1] });
             }
@@ -318,7 +339,7 @@ async function processTask(task, dadSnapshot) {
 
             const currentTaskQueue = state.sceneArchive[state.currentSceneIndex].taskQueue || [];
             currentTaskQueue.forEach(t => {
-                const assetCacheKey = `${t.assetId}_${t.type}`;
+                const assetCacheKey = generateImageCacheKey(t.assetId, t.type);
                 if (t.type === '3_view_reference' && state.imageCache.has(assetCacheKey)) {
                     referenceImages.push({ id: assetCacheKey, base64Data: state.imageCache.get(assetCacheKey).split(',')[1] });
                 }
@@ -351,11 +372,134 @@ async function processTask(task, dadSnapshot) {
 }
 
 
+// --- SECTION: 메인 메뉴 시스템 구현 ---
+
+function showToolbarModal(action) {
+    const existingModal = document.querySelector('.toolbar-modal');
+    if (existingModal) existingModal.remove();
+
+    const modal = document.createElement('div');
+    modal.className = 'toolbar-modal';
+
+    const currentScene = state.sceneArchive[state.currentSceneIndex];
+    const hints = currentScene?.hints || {};
+
+    let content = '';
+    switch (action) {
+        case 'inventory':
+            const inventory = hints.inventory || [];
+            content = `
+                <div class="flex justify-between items-center border-b border-gray-700 pb-4 mb-4">
+                    <h3 class="text-2xl font-bold">🎒 인벤토리</h3>
+                    <button class="close-modal text-4xl hover:text-gray-300 cursor-pointer">&times;</button>
+                </div>
+                ${inventory.length > 0 ?
+                    `<div class="space-y-3">
+                        ${inventory.map(item => `
+                            <div class="bg-gray-700/50 p-3 rounded-lg">
+                                <div class="font-semibold text-white">${item.name || 'N/A'}</div>
+                                <div class="text-sm text-gray-400 mt-1">${item.tooltip || '설명 없음'}</div>
+                                <div class="text-xs text-gray-500 mt-1">사용 가능: ${item.usable ? '예' : '아니오'}</div>
+                            </div>
+                        `).join('')}
+                    </div>` :
+                    `<p class="text-lg">현재 소지품이 없습니다.</p>
+                     <p class="text-gray-400 mt-2">아이템을 획득하면 여기에 표시됩니다.</p>`
+                }
+            `;
+            break;
+        case 'status':
+            const characters = hints.characters || [];
+            const mainCharacter = characters.find(c => c.name?.includes('주인공') || c.name?.includes('당신')) || characters[0];
+            content = `
+                <div class="flex justify-between items-center border-b border-gray-700 pb-4 mb-4">
+                    <h3 class="text-2xl font-bold">📊 캐릭터 상태</h3>
+                    <button class="close-modal text-4xl hover:text-gray-300 cursor-pointer">&times;</button>
+                </div>
+                ${mainCharacter ?
+                    `<div class="space-y-4">
+                        <div class="bg-gray-700/50 p-4 rounded-lg">
+                            <div class="font-bold text-xl text-white mb-2">${mainCharacter.name}</div>
+                            <div class="text-gray-300">${mainCharacter.status || '상태 정보 없음'}</div>
+                            ${mainCharacter.tooltip ? `<div class="text-sm text-gray-400 mt-2">${mainCharacter.tooltip}</div>` : ''}
+                        </div>
+                        ${characters.length > 1 ?
+                            `<div class="border-t border-gray-600 pt-4">
+                                <h4 class="font-semibold text-white mb-2">주변 인물들</h4>
+                                ${characters.slice(1).map(char => `
+                                    <div class="bg-gray-800/50 p-2 rounded mb-2">
+                                        <div class="font-medium text-gray-200">${char.name}</div>
+                                        <div class="text-sm text-gray-400">${char.status || ''}</div>
+                                    </div>
+                                `).join('')}
+                            </div>` : ''
+                        }
+                    </div>` :
+                    `<p class="text-lg">캐릭터 정보를 불러올 수 없습니다.</p>
+                     <p class="text-gray-400 mt-2">게임을 진행하면서 정보가 업데이트됩니다.</p>`
+                }
+            `;
+            break;
+        case 'skills':
+            const skills = hints.skills || [];
+            content = `
+                <div class="flex justify-between items-center border-b border-gray-700 pb-4 mb-4">
+                    <h3 class="text-2xl font-bold">⚔️ 스킬</h3>
+                    <button class="close-modal text-4xl hover:text-gray-300 cursor-pointer">&times;</button>
+                </div>
+                ${skills.length > 0 ?
+                    `<div class="space-y-3">
+                        ${skills.map(skill => `
+                            <div class="bg-gray-700/50 p-3 rounded-lg">
+                                <div class="font-semibold text-white">${skill.name || 'N/A'}</div>
+                                <div class="text-sm text-gray-400 mt-1">${skill.tooltip || '설명 없음'}</div>
+                                <div class="text-xs mt-1">
+                                    <span class="text-gray-500">소유자: ${skill.owner || '불명'}</span>
+                                    <span class="ml-3 ${skill.usable ? 'text-green-400' : 'text-red-400'}">
+                                        ${skill.usable ? '사용 가능' : '사용 불가'}
+                                    </span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>` :
+                    `<p class="text-lg">특별한 스킬을 배우지 않았습니다.</p>
+                     <p class="text-gray-400 mt-2">모험을 진행하면서 새로운 능력을 습득할 수 있습니다.</p>`
+                }
+            `;
+            break;
+        default:
+            return;
+    }
+
+    modal.innerHTML = content;
+    dom.imageArea.appendChild(modal);
+
+    modal.querySelector('.close-modal').onclick = () => modal.remove();
+    modal.onclick = (e) => {
+        if (e.target === modal) modal.remove();
+    };
+}
+
 // --- SECTION: 이벤트 리스너 등록 (v4) ---
 
 function initializeEventListeners() {
-    inputHandler.initializeInputHandler();
-    dom.startBtn.addEventListener('click', startGame);
+    console.log('Initializing event listeners...');
+    console.log('startBtn element:', dom.startBtn);
+
+    if (dom.startBtn) {
+        dom.startBtn.addEventListener('click', (e) => {
+            console.log('Start button clicked!', e);
+            startGame();
+        });
+        console.log('Start button event listener added');
+
+        // 추가 테스트: 버튼에 마우스 오버 이벤트도 추가
+        dom.startBtn.addEventListener('mouseover', () => {
+            console.log('Start button hovered');
+        });
+    } else {
+        console.error('Start button not found!');
+    }
     dom.loadBtn.addEventListener('click', () => dom.loadInput.click());
     dom.loadInput.addEventListener('change', utils.handleFileLoad);
 
@@ -365,9 +509,10 @@ function initializeEventListeners() {
     dom.storyForm.addEventListener('submit', handleUserInput);
     dom.userInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); dom.storyForm.dispatchEvent(new Event('submit')); } });
     dom.userInput.addEventListener('input', () => { dom.userInput.style.height = 'auto'; dom.userInput.style.height = (dom.userInput.scrollHeight) + 'px'; });
-    dom.userInput.addEventListener('focus', () => dom.inputPanel.classList.add('focused'));
-    dom.userInput.addEventListener('blur', () => dom.inputPanel.classList.remove('focused'));
+    dom.userInput.addEventListener('focus', () => dom.inputPanel?.classList.add('focused'));
+    dom.userInput.addEventListener('blur', () => dom.inputPanel?.classList.remove('focused'));
 
+    // Floating settings button removed in new layout
     dom.closeSettingsBtn.addEventListener('click', () => dom.settingsModal.classList.add('hidden'));
     dom.debugCheckbox.addEventListener('change', () => {
         state.setIsDebugMode(dom.debugCheckbox.checked);
@@ -386,8 +531,19 @@ function initializeEventListeners() {
 
     dom.branchBtn.addEventListener('click', () => {
         state.setIsBranchingActive(true);
-        ui.renderScene(state.currentSceneIndex); // Re-render to activate choices
+        ui.renderScene(state.currentSceneIndex);
         dom.userInput.placeholder = "다른 선택지를 고르거나, 새로운 행동을 입력하세요.";
+    });
+
+    dom.mainMenuBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const action = e.currentTarget.dataset.action;
+            if (action === 'settings') {
+                dom.settingsModal.classList.remove('hidden');
+            } else if (action) {
+                showToolbarModal(action);
+            }
+        });
     });
 
     const closeImageViewer = () => dom.imageViewerModal.classList.add('hidden');
@@ -404,6 +560,8 @@ function initializeEventListeners() {
             e.preventDefault();
             if (!dom.imageViewerModal.classList.contains('hidden')) {
                 closeImageViewer();
+            } else if (document.querySelector('.toolbar-modal')) {
+                document.querySelector('.toolbar-modal').remove();
             } else if (state.isBranchingActive) {
                 state.setIsBranchingActive(false);
                 ui.renderScene(state.currentSceneIndex);
@@ -417,8 +575,8 @@ function initializeEventListeners() {
         if (e.key === 'ArrowLeft') { dom.prevBtn.click(); }
         if (e.key === 'ArrowRight') { dom.nextBtn.click(); }
 
-        if (e.key === 'ArrowUp') { document.querySelector('#story-panel .flex-grow').scrollBy(0, -50); }
-        if (e.key === 'ArrowDown') { document.querySelector('#story-panel .flex-grow').scrollBy(0, 50); }
+        if (e.key === 'ArrowUp') { document.querySelector('.flex-grow')?.scrollBy(0, -50); }
+        if (e.key === 'ArrowDown') { document.querySelector('.flex-grow')?.scrollBy(0, 50); }
 
         if (e.ctrlKey && e.key === 'ArrowDown') { e.preventDefault(); dom.userInput.focus(); }
         if (e.ctrlKey && e.key === 'ArrowUp') { e.preventDefault(); dom.prevBtn.focus(); }
@@ -427,4 +585,9 @@ function initializeEventListeners() {
 
 // --- SECTION: 애플리케이션 초기화 ---
 
-window.addEventListener('DOMContentLoaded', initializeEventListeners);
+console.log('Main.js loaded');
+
+window.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM Content Loaded');
+    initializeEventListeners();
+});

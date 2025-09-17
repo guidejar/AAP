@@ -63,6 +63,8 @@ export const assetPipelineViewer = document.getElementById('asset-pipeline-viewe
 export const imageCacheViewer = document.getElementById('image-cache-viewer');
 
 // 설정 관련 요소
+// Floating settings button removed in new layout
+// export const settingsBtnFloating = document.getElementById('settings-btn-floating');
 export const settingsModal = document.getElementById('settings-modal');
 export const closeSettingsBtn = document.getElementById('close-settings-btn');
 export const apiKeySetupInput = document.getElementById('api-key-setup-input');
@@ -79,6 +81,6 @@ export const imageViewerModal = document.getElementById('image-viewer-modal');
 export const modalImageContent = document.getElementById('modal-image-content');
 export const closeImageViewerBtn = document.getElementById('close-image-viewer');
 
-// New Layout Elements from Refactoring
+// 새로운 요소들 추가
 export const mainMenuBtns = document.querySelectorAll('.main-menu-btn');
-export const imageArea = document.querySelector('.image-section');
+export const imageArea = document.querySelector('.flex-1') || document.getElementById('illustration-panel');

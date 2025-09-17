@@ -15,6 +15,121 @@
 import * as state from './state.js';
 
 /**
+ * 프롬프트 데이터를 나노바나나 친화적인 자연어로 변환하는 함수
+ * @param {object} promptData - 프롬프트 템플릿 데이터
+ * @returns {string} 자연어 프롬프트
+ */
+function buildNaturalPrompt(promptData) {
+    let prompt = '';
+
+    // 역할 정의
+    if (promptData.role) {
+        prompt += `${promptData.role}\n\n`;
+    }
+
+    // 미션/목표
+    if (promptData.mission) {
+        prompt += `Mission: ${promptData.mission}\n\n`;
+    }
+
+    // 스타일 지시사항
+    if (promptData.style_directive) {
+        prompt += `Style Guidelines: ${promptData.style_directive}\n\n`;
+    }
+
+    // 포맷 지시사항
+    if (promptData.format_directive) {
+        prompt += `Format Requirements: ${promptData.format_directive}\n\n`;
+    }
+
+    // 상세 포커스
+    if (promptData.detail_focus) {
+        prompt += `Detail Focus: ${promptData.detail_focus}\n\n`;
+    }
+
+    // 크기 지시사항
+    if (promptData.size_directive) {
+        prompt += `Size Guidelines: ${promptData.size_directive}\n\n`;
+    }
+
+    // 상황별 우선순위
+    if (promptData.situational_override) {
+        prompt += `Important Note: ${promptData.situational_override}\n\n`;
+    }
+
+    // 구성 규칙
+    if (promptData.composition_rule) {
+        prompt += `Composition Rule: ${promptData.composition_rule}\n\n`;
+    }
+
+    // 첨부파일 매핑
+    if (promptData.attachment_mapping) {
+        prompt += `Reference Images: ${promptData.attachment_mapping}\n\n`;
+    }
+
+    // 데이터 페이로드 (캐릭터, 아이템 등 정보)
+    if (promptData.data_payload) {
+        prompt += 'Subject Information:\n';
+        const data = promptData.data_payload;
+
+        if (data.name) prompt += `- Name: ${data.name}\n`;
+        if (data.description) prompt += `- Description: ${data.description}\n`;
+        if (data.appearance) prompt += `- Appearance: ${data.appearance}\n`;
+        if (data.personality) prompt += `- Personality: ${data.personality}\n`;
+        if (data.size) prompt += `- Size: ${data.size}\n`;
+        if (data.genre) prompt += `- Genre: ${data.genre}\n`;
+        if (data.adventure) prompt += `- Adventure Theme: ${data.adventure}\n`;
+
+        // 키 캐릭터들
+        if (data.keyCharacters && data.keyCharacters.length > 0) {
+            prompt += '- Key Characters:\n';
+            data.keyCharacters.forEach(char => {
+                prompt += `  * ${char.name || 'Unnamed'}: ${char.description || 'No description'}\n`;
+            });
+        }
+
+        // 키 아이템들
+        if (data.keyItems && data.keyItems.length > 0) {
+            prompt += '- Key Items:\n';
+            data.keyItems.forEach(item => {
+                prompt += `  * ${item.name || 'Unnamed'}: ${item.description || 'No description'}\n`;
+            });
+        }
+
+        // 키 장소들
+        if (data.keyLocations && data.keyLocations.length > 0) {
+            prompt += '- Key Locations:\n';
+            data.keyLocations.forEach(loc => {
+                prompt += `  * ${loc.name || 'Unnamed'}: ${loc.description || 'No description'}\n`;
+            });
+        }
+
+        prompt += '\n';
+    }
+
+    // 씬 텍스트 페이로드 (일러스트레이션용)
+    if (promptData.scene_text_payload) {
+        prompt += `Scene to Illustrate:\n"${promptData.scene_text_payload}"\n\n`;
+    }
+
+    // 품질 및 기술적 요구사항
+    if (promptData.quality_requirements) {
+        prompt += `Quality Requirements: ${promptData.quality_requirements}\n\n`;
+    }
+
+    if (promptData.technical_specs) {
+        prompt += `Technical Specifications: ${promptData.technical_specs}\n\n`;
+    }
+
+    // 금지사항
+    if (promptData.content_policy) {
+        prompt += `Content Guidelines: ${promptData.content_policy}\n\n`;
+    }
+
+    return prompt.trim();
+}
+
+/**
  * API 호출 시 발생하는 특정 오류를 식별하기 위한 커스텀 에러 클래스
  */
 export class ApiError extends Error {
@@ -101,7 +216,11 @@ export async function callImageAPI(promptData, referenceImages = [], useApiKey =
     const key = useApiKey ? state.userApiKey : '';
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${key}`;
 
-    const parts = [{ text: JSON.stringify(promptData) }];
+    // JSON.stringify 대신 자연어 프롬프트 사용 (A6 해결)
+    const naturalPrompt = buildNaturalPrompt(promptData);
+    console.log(`Natural prompt for ${promptData.mission || 'image generation'}:`, naturalPrompt);
+
+    const parts = [{ text: naturalPrompt }];
     if (referenceImages?.length > 0) {
         referenceImages.forEach(img => {
             if (img?.base64Data) {

@@ -26,25 +26,45 @@ export function renderScene(index) {
     const scene = state.sceneArchive[index];
     const isLatestScene = index === state.sceneArchive.length - 1;
 
-    dom.sceneTitleEl.textContent = scene.title;
-    dom.storyOutputEl.textContent = scene.story;
+    if (dom.sceneTitleEl) {
+        dom.sceneTitleEl.textContent = scene.title;
+    }
+    if (dom.storyOutputEl) {
+        dom.storyOutputEl.textContent = scene.story;
+    }
 
     if (scene.isComplete) {
         const imageUrl = state.imageCache.get(scene.displayImageId);
-        if (imageUrl && dom.illustrationEl.src !== imageUrl) {
+        if (imageUrl && dom.illustrationEl && dom.illustrationEl.src !== imageUrl) {
             dom.illustrationEl.style.opacity = 0;
-            setTimeout(() => { 
-                dom.illustrationEl.src = imageUrl; 
-                dom.illustrationEl.style.opacity = 1; 
+            setTimeout(() => {
+                if (dom.illustrationEl) {
+                    dom.illustrationEl.src = imageUrl;
+                    dom.illustrationEl.style.opacity = 1;
+                    // 반응형 이미지 레이아웃 업데이트
+                    handleResponsiveImageLayout();
+                }
             }, 300);
+        } else if (imageUrl && dom.illustrationEl) {
+            // 이미지가 이미 로드된 경우에도 반응형 레이아웃 확인
+            handleResponsiveImageLayout();
         }
-        dom.imageLoader.classList.add('hidden');
-        
+        if (dom.imageLoader) {
+            dom.imageLoader.classList.add('hidden');
+        }
+        renderHintPanel(scene.hints);
         renderChoices(scene.choices, (isLatestScene || state.isBranchingActive) && !state.isGenerating);
     } else {
-        dom.imageLoader.classList.remove('hidden');
-        dom.imageLoaderText.textContent = "새로운 삽화 생성 중...";
-        dom.hintPanel.innerHTML = '<div class="text-center text-gray-400 p-8">장면 분석 중...</div>';
+        if (dom.imageLoader) {
+            dom.imageLoader.classList.remove('hidden');
+        }
+        if (dom.imageLoaderText) {
+            dom.imageLoaderText.textContent = "새로운 삽화 생성 중...";
+        }
+        // Hint panel has been removed in new layout - this code is no longer needed
+        // if (dom.hintPanel) {
+        //     dom.hintPanel.innerHTML = '<div class="text-center text-gray-400 p-8">장면 분석 중...</div>';
+        // }
         clearChoices();
     }
 
@@ -58,16 +78,26 @@ export function renderScene(index) {
 function updateUiState(isLatestScene) {
     const isBranching = state.isBranchingActive;
 
-    dom.inputContainer.classList.toggle('hidden', !isLatestScene && !isBranching);
-    dom.pastActionContainer.classList.toggle('hidden', isLatestScene || isBranching);
-    dom.branchBtn.classList.toggle('hidden', isLatestScene || isBranching);
+    if (dom.inputContainer) {
+        dom.inputContainer.classList.toggle('hidden', !isLatestScene && !isBranching);
+    }
+    if (dom.pastActionContainer) {
+        dom.pastActionContainer.classList.toggle('hidden', isLatestScene || isBranching);
+    }
+    if (dom.branchBtn) {
+        dom.branchBtn.classList.toggle('hidden', isLatestScene || isBranching);
+    }
 
-    if (!isLatestScene && !isBranching) {
+    if (!isLatestScene && !isBranching && dom.pastActionText) {
         dom.pastActionText.textContent = state.sceneArchive[state.currentSceneIndex + 1]?.user_input || '';
     }
 
-    dom.prevBtn.disabled = state.currentSceneIndex === 0;
-    dom.nextBtn.disabled = isLatestScene;
+    if (dom.prevBtn) {
+        dom.prevBtn.disabled = state.currentSceneIndex === 0;
+    }
+    if (dom.nextBtn) {
+        dom.nextBtn.disabled = isLatestScene;
+    }
 
     updateGlobalLoadingState();
 }
@@ -80,23 +110,97 @@ export function updateGlobalLoadingState() {
     const isBranching = state.isBranchingActive;
 
     if (state.isGenerating && isLatestScene) {
-        dom.inputLoader.classList.remove('hidden');
-        dom.inputContainer.classList.add('hidden');
-        dom.inputLoaderText.textContent = "장면 생성 중...";
+        if (dom.inputLoader) {
+            dom.inputLoader.classList.remove('hidden');
+        }
+        if (dom.inputContainer) {
+            dom.inputContainer.classList.add('hidden');
+        }
+        if (dom.inputLoaderText) {
+            dom.inputLoaderText.textContent = "장면 생성 중...";
+        }
         toggleInput(true);
     } else {
-        dom.inputLoader.classList.add('hidden');
+        if (dom.inputLoader) {
+            dom.inputLoader.classList.add('hidden');
+        }
         const shouldBeInteractive = (isLatestScene || isBranching) && !state.isGenerating;
         toggleInput(!shouldBeInteractive);
-        if (shouldBeInteractive) {
+        if (shouldBeInteractive && dom.userInput) {
             dom.userInput.focus();
         }
     }
 }
 
-/* The 'renderHintPanel' function was removed because the hint panel is obsolete in the new UI. */
+function renderHintPanel(hints) {
+    // Hint panel has been removed in new layout - function disabled
+    return;
+    // if (!dom.hintPanel) return;
+    // dom.hintPanel.innerHTML = '';
+    // if (!hints) return;
 
-/* The 'setupTooltipListeners' function was removed as it was a dependency of the obsolete renderHintPanel. */
+    let finalHtml = '';
+    const enabledItemClasses = 'bg-gray-700/80 border-gray-600 hover:bg-gray-600 hover:border-gray-500 cursor-pointer';
+    const disabledItemClasses = 'bg-gray-800/60 border-gray-700/50 text-gray-500 cursor-default';
+    const infoItemClasses = 'bg-gray-700/40 border-gray-600 text-gray-300 cursor-default';
+
+    if (hints.characters && hints.characters.length > 0) {
+        finalHtml += `
+            <div>
+                <h3 class="font-bold text-xl mb-3 border-b border-gray-700 pb-2">캐릭터</h3>
+                <div class="flex flex-wrap gap-2">
+                    ${hints.characters.map(item => `
+                        <span class="js-tooltip-trigger ${infoItemClasses}" data-tooltip="${item.tooltip || '정보 없음'}">
+                            <span class="font-semibold text-white">${item.name || 'N/A'}</span>: ${item.status || ''}
+                        </span>
+                    `).join('')}
+                </div>
+            </div>`;
+    }
+
+    const createHintSection = (title, items, category) => {
+        if (!items || items.length === 0) return '';
+        return `
+            <div class="mt-6">
+                <h3 class="font-bold text-xl mb-3 border-b border-gray-700 pb-2">${title}</h3>
+                <div class="flex flex-wrap gap-2">
+                    ${items.map(item => `
+                        <span class="js-tooltip-trigger ${item.usable ? enabledItemClasses : disabledItemClasses}" data-tooltip="${item.tooltip || '정보 없음'}">
+                            ${item.name || 'N/A'}
+                            ${category === 'skills' && item.owner ? ` <span class="text-xs opacity-70">(${item.owner})</span>` : ''}
+                        </span>
+                    `).join('')}
+                </div>
+            </div>`;
+    };
+    
+    finalHtml += createHintSection('스킬', hints.skills, 'skills');
+    finalHtml += createHintSection('인벤토리', hints.inventory, 'inventory');
+
+    // Hint panel has been removed in new layout
+    // if (dom.hintPanel) {
+    //     dom.hintPanel.innerHTML = finalHtml;
+    // }
+    setupTooltipListeners();
+}
+
+function setupTooltipListeners() {
+    const tooltipTriggers = document.querySelectorAll('.js-tooltip-trigger');
+    tooltipTriggers.forEach(trigger => {
+        trigger.addEventListener('mouseover', (e) => {
+            const tooltipText = e.currentTarget.dataset.tooltip;
+            dom.globalTooltip.textContent = tooltipText;
+            dom.globalTooltip.classList.add('visible');
+        });
+        trigger.addEventListener('mousemove', (e) => {
+            dom.globalTooltip.style.left = `${e.clientX + 15}px`;
+            dom.globalTooltip.style.top = `${e.clientY + 15}px`;
+        });
+        trigger.addEventListener('mouseout', () => {
+            dom.globalTooltip.classList.remove('visible');
+        });
+    });
+}
 
 export function showPageLoader(text) { 
     dom.pageLoaderText.textContent = text; 
@@ -125,17 +229,25 @@ function renderChoices(choices, areClickable = true) {
             button.disabled = true;
         }
         
-        dom.choiceContainer.appendChild(button);
+        if (dom.choiceContainer) {
+            dom.choiceContainer.appendChild(button);
+        }
     });
 }
 
-export function clearChoices() { 
-    dom.choiceContainer.innerHTML = ''; 
+export function clearChoices() {
+    if (dom.choiceContainer) {
+        dom.choiceContainer.innerHTML = '';
+    }
 }
 
-export function toggleInput(isDisabled) { 
-    dom.userInput.disabled = isDisabled; 
-    dom.sendBtn.disabled = isDisabled; 
+export function toggleInput(isDisabled) {
+    if (dom.userInput) {
+        dom.userInput.disabled = isDisabled;
+    }
+    if (dom.sendBtn) {
+        dom.sendBtn.disabled = isDisabled;
+    }
 }
 
 export function toggleDebugView(show) {
@@ -143,38 +255,141 @@ export function toggleDebugView(show) {
     if (!scene) return;
 
     if (show) {
-        dom.promptOverlay.textContent = `[DISPLAY_IMAGE_ID]: ${scene.displayImageId || 'N/A'}`;
-        dom.promptOverlay.classList.remove('hidden');
-        
-        dom.debugInputText.parentElement.querySelector('h4').textContent = 'DEBUG: 1차 API 응답 (서사)';
-        dom.debugInputText.textContent = scene.raw_story_response || 'N/A';
-        
-        dom.debugOutputText.parentElement.querySelector('h4').textContent = 'DEBUG: 2차 API 응답 (분석)';
-        dom.debugOutputText.textContent = scene.raw_analysis_response || 'N/A';
-        
-        dom.assetPipelineViewer.parentElement.querySelector('h4').textContent = 'DEBUG: 작업 큐 (Task Queue)';
-        dom.assetPipelineViewer.textContent = JSON.stringify(scene.taskQueue, null, 2) || 'N/A';
-
-        dom.imageCacheViewer.innerHTML = '';
-        if (state.imageCache.size === 0) { 
-            dom.imageCacheViewer.textContent = 'Image cache is empty.'; 
-        } else {
-            state.imageCache.forEach((base64Data, id) => {
-                const link = document.createElement('a');
-                link.href = '#';
-                link.textContent = id;
-                link.className = 'text-cyan-400 hover:underline cursor-pointer';
-                link.onclick = (e) => {
-                    e.preventDefault();
-                    dom.modalImageContent.src = base64Data;
-                    dom.imageViewerModal.classList.remove('hidden');
-                };
-                dom.imageCacheViewer.appendChild(link);
-            });
+        if (dom.promptOverlay) {
+            dom.promptOverlay.textContent = `[DISPLAY_IMAGE_ID]: ${scene.displayImageId || 'N/A'}`;
+            dom.promptOverlay.classList.remove('hidden');
         }
-        dom.debugOutputContainer.classList.remove('hidden');
+
+        if (dom.debugInputText) {
+            dom.debugInputText.parentElement.querySelector('h4').textContent = 'DEBUG: 1차 API 응답 (서사)';
+            dom.debugInputText.textContent = scene.raw_story_response || 'N/A';
+        }
+
+        if (dom.debugOutputText) {
+            dom.debugOutputText.parentElement.querySelector('h4').textContent = 'DEBUG: 2차 API 응답 (분석)';
+            dom.debugOutputText.textContent = scene.raw_analysis_response || 'N/A';
+        }
+
+        if (dom.assetPipelineViewer) {
+            dom.assetPipelineViewer.parentElement.querySelector('h4').textContent = 'DEBUG: 작업 큐 (Task Queue)';
+            dom.assetPipelineViewer.textContent = JSON.stringify(scene.taskQueue, null, 2) || 'N/A';
+        }
+
+        if (dom.imageCacheViewer) {
+            dom.imageCacheViewer.innerHTML = '';
+        }
+        if (dom.imageCacheViewer) {
+            if (state.imageCache.size === 0) {
+                dom.imageCacheViewer.textContent = 'Image cache is empty.';
+            } else {
+                state.imageCache.forEach((base64Data, id) => {
+                    const link = document.createElement('a');
+                    link.href = '#';
+                    link.textContent = id;
+                    link.className = 'text-cyan-400 hover:underline cursor-pointer';
+                    link.onclick = (e) => {
+                        e.preventDefault();
+                        if (dom.modalImageContent && dom.imageViewerModal) {
+                            dom.modalImageContent.src = base64Data;
+                            dom.imageViewerModal.classList.remove('hidden');
+                        }
+                    };
+                    dom.imageCacheViewer.appendChild(link);
+                });
+            }
+        }
+        if (dom.debugOutputContainer) {
+            dom.debugOutputContainer.classList.remove('hidden');
+        }
     } else {
-        dom.promptOverlay.classList.add('hidden');
-        dom.debugOutputContainer.classList.add('hidden');
+        if (dom.promptOverlay) {
+            dom.promptOverlay.classList.add('hidden');
+        }
+        if (dom.debugOutputContainer) {
+            dom.debugOutputContainer.classList.add('hidden');
+        }
     }
 }
+
+/**
+ * 반응형 이미지 위치 관리 - 작은 화면에서 이미지를 텍스트 영역으로 이동
+ */
+let mobileImageContainer = null;
+let isImageInTextArea = false;
+
+export function handleResponsiveImageLayout() {
+    const isMobile = window.innerWidth <= 480;
+    const textScrollArea = document.querySelector('#story-screen .flex-\\[2\\] .flex-grow.overflow-y-auto');
+    const originalImageContainer = document.querySelector('#story-screen .flex-1:has(#story-illustration)') ||
+                                  document.querySelector('#story-screen .flex-1');
+    const storyIllustration = dom.illustrationEl;
+
+    if (!textScrollArea || !storyIllustration) return;
+
+    if (isMobile && !isImageInTextArea) {
+        // 모바일: 이미지를 텍스트 영역으로 이동
+        if (originalImageContainer) {
+            originalImageContainer.style.display = 'none';
+        }
+
+        // 이미지 컨테이너 생성 (없는 경우)
+        if (!mobileImageContainer) {
+            mobileImageContainer = document.createElement('div');
+            mobileImageContainer.className = 'order-3 flex-shrink-0 relative bg-black overflow-hidden mt-4';
+            mobileImageContainer.style.minHeight = '200px';
+            mobileImageContainer.style.maxHeight = '300px';
+
+            // 이미지 요소 복제 및 스타일링
+            const mobileImage = storyIllustration.cloneNode();
+            mobileImage.className = 'w-full h-full object-cover';
+            mobileImage.id = 'mobile-story-illustration';
+
+            // 로더도 복제
+            const originalLoader = document.getElementById('image-loader');
+            if (originalLoader) {
+                const mobileLoader = originalLoader.cloneNode(true);
+                mobileLoader.id = 'mobile-image-loader';
+                mobileImageContainer.appendChild(mobileLoader);
+            }
+
+            mobileImageContainer.appendChild(mobileImage);
+        }
+
+        // 텍스트 영역에 추가
+        textScrollArea.appendChild(mobileImageContainer);
+
+        // 원본 이미지와 모바일 이미지 동기화
+        const mobileImage = document.getElementById('mobile-story-illustration');
+        if (mobileImage && storyIllustration.src) {
+            mobileImage.src = storyIllustration.src;
+            mobileImage.style.opacity = storyIllustration.style.opacity;
+        }
+
+        isImageInTextArea = true;
+
+    } else if (!isMobile && isImageInTextArea) {
+        // 데스크톱: 이미지를 원래 위치로 복원
+        if (originalImageContainer) {
+            originalImageContainer.style.display = '';
+        }
+
+        if (mobileImageContainer && mobileImageContainer.parentNode) {
+            mobileImageContainer.parentNode.removeChild(mobileImageContainer);
+        }
+
+        isImageInTextArea = false;
+    }
+
+    // 모바일에서 이미지 업데이트 시 동기화
+    if (isMobile && isImageInTextArea) {
+        const mobileImage = document.getElementById('mobile-story-illustration');
+        if (mobileImage && storyIllustration.src) {
+            mobileImage.src = storyIllustration.src;
+            mobileImage.style.opacity = storyIllustration.style.opacity;
+        }
+    }
+}
+
+// 윈도우 리사이즈 이벤트 리스너 추가
+window.addEventListener('resize', handleResponsiveImageLayout);
+window.addEventListener('load', handleResponsiveImageLayout);
