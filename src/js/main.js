@@ -128,6 +128,18 @@ function initializeEventListeners() {
             }
         });
     }
+
+    // 툴바 아이콘 클릭 이벤트 처리
+    const toolbarIconsContainer = document.querySelector('.toolbar-icons');
+    if (toolbarIconsContainer) {
+        toolbarIconsContainer.addEventListener('click', (e) => {
+            const button = e.target.closest('.toolbar-btn');
+            if (button) {
+                const action = button.dataset.action;
+                showToolbarModal(action);
+            }
+        });
+    }
 }
 
 // 예시 선택지 렌더링 함수 (실제 데이터는 API로부터 받아옴)
@@ -140,6 +152,32 @@ function renderChoices(choices) {
         button.className = 'choice-button';
         button.textContent = `💬 \"${choice}\"`;
         choicesContainer.appendChild(button);
+    });
+}
+
+function showToolbarModal(action) {
+    const imageArea = document.getElementById('image-area');
+    // 기존 모달 제거
+    const existingModal = imageArea.querySelector('.toolbar-modal');
+    if (existingModal) existingModal.remove();
+
+    const modal = document.createElement('div');
+    modal.className = 'toolbar-modal';
+    
+    let modalContent = `<h2>${action.toUpperCase()}</h2><p>내용 준비 중...</p>`;
+    // 여기에 action 종류에 따라 다른 컨텐츠를 로드하는 로직 추가 가능
+
+    modal.innerHTML = `
+        <button class="close-button" title="닫기">&times;</button>
+        ${modalContent}
+    `;
+    
+    imageArea.style.position = 'relative'; // 모달의 absolute 포지셔닝 기준점 설정
+    imageArea.appendChild(modal);
+
+    // 닫기 버튼 이벤트
+    modal.querySelector('.close-button').addEventListener('click', () => {
+        modal.remove();
     });
 }
 
