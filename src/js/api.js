@@ -151,14 +151,22 @@ export class ApiError extends Error {
  * @throws {ApiError} API 호출 실패 시
  * @throws {Error} 그 외 네트워크 오류 등
  */
-export async function callGenerativeAPI(context, systemPrompt, useApiKey) {
+export async function callGenerativeAPI(context, systemPrompt, useApiKey = false, allowFallback = true) {
     const operation = 'text_api_call';
     const performanceMarkId = debug.startPerformanceMark(operation);
 
+    // API 키 필요하지만 없는 경우
     if (useApiKey && !state.userApiKey) {
         throw new Error("API 키가 설정되지 않았습니다. 설정에서 키를 입력해주세요.");
     }
 
+    return await callGenerativeAPIWithFallback(context, systemPrompt, useApiKey, allowFallback, operation);
+}
+
+/**
+ * 폴백 로직을 포함한 내부 API 호출 함수
+ */
+async function callGenerativeAPIWithFallback(context, systemPrompt, useApiKey, allowFallback, operation) {
     const modelName = useApiKey ? 'gemini-2.5-pro' : 'gemini-2.5-flash-preview-05-20';
     const key = useApiKey ? state.userApiKey : '';
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${key}`;
@@ -182,6 +190,24 @@ export async function callGenerativeAPI(context, systemPrompt, useApiKey) {
 
         if (!response.ok) {
             const errorBody = await response.text();
+
+            // 할당량 초과 감지 및 폴백 시도
+            if (response.status === 429 && !useApiKey && allowFallback && state.userApiKey) {
+                console.warn(`내부 텍스트 API 할당량 초과. API 키를 사용하여 재시도합니다.`);
+
+                // 상세 API 에러 로깅 (폴백 시도 전)
+                debug.logApiCall('text', modelName, false, {
+                    duration: performanceLog?.duration,
+                    requestSize,
+                    statusCode: response.status,
+                    errorMessage: `내부 API 할당량 초과, 사용자 API 키로 폴백 시도`,
+                    errorBody,
+                    payload: state.isDebugMode ? payload : null
+                });
+
+                // 사용자 API 키로 재시도
+                return await callGenerativeAPIWithFallback(context, systemPrompt, true, false, operation);
+            }
 
             // 상세 API 에러 로깅
             debug.logApiCall('text', modelName, false, {
@@ -268,7 +294,7 @@ export async function callGenerativeAPI(context, systemPrompt, useApiKey) {
  * @throws {ApiError} API 호출 실패 시
  * @throws {Error} 그 외 네트워크 오류 등
  */
-export async function callImageAPI(promptData, referenceImages = [], useApiKey = false, cacheKey = null) {
+export async function callImageAPI(promptData, referenceImages = [], useApiKey = false, cacheKey = null, allowFallback = true) {
     const operation = 'image_api_call';
     const performanceMarkId = debug.startPerformanceMark(operation);
 
@@ -276,6 +302,13 @@ export async function callImageAPI(promptData, referenceImages = [], useApiKey =
         throw new Error("API 키가 설정되지 않았습니다. 설정에서 키를 입력해주세요.");
     }
 
+    return await callImageAPIWithFallback(promptData, referenceImages, useApiKey, cacheKey, allowFallback, operation);
+}
+
+/**
+ * 폴백 로직을 포함한 내부 이미지 API 호출 함수
+ */
+async function callImageAPIWithFallback(promptData, referenceImages, useApiKey, cacheKey, allowFallback, operation) {
     // API 키 사용 시 Pro 모델, 미사용 시 Flash Image 모델 사용
     const modelName = useApiKey ? 'gemini-2.5-pro' : 'gemini-2.5-flash-image-preview';
     const key = useApiKey ? state.userApiKey : '';
@@ -313,6 +346,27 @@ export async function callImageAPI(promptData, referenceImages = [], useApiKey =
 
         if (!response.ok) {
             const errorBody = await response.text();
+
+            // 할당량 초과 감지 및 폴백 시도
+            if (response.status === 429 && !useApiKey && allowFallback && state.userApiKey) {
+                console.warn(`내부 이미지 API 할당량 초과 (${cacheKey}). API 키를 사용하여 재시도합니다.`);
+
+                // 이미지 프롬프트 폴백 시도 로깅
+                debug.logImagePrompt(cacheKey || 'unknown', promptData, naturalPrompt, referenceImages, null);
+
+                // API 호출 실패 로깅 (폴백 시도 전)
+                debug.logApiCall('image', modelName, false, {
+                    duration: performanceLog?.duration,
+                    requestSize,
+                    statusCode: response.status,
+                    errorMessage: `내부 API 할당량 초과, 사용자 API 키로 폴백 시도`,
+                    errorBody,
+                    payload: state.isDebugMode ? payload : null
+                });
+
+                // 사용자 API 키로 재시도
+                return await callImageAPIWithFallback(promptData, referenceImages, true, cacheKey, false, operation);
+            }
 
             // 이미지 프롬프트 실패 로깅
             debug.logImagePrompt(cacheKey || 'unknown', promptData, naturalPrompt, referenceImages, null);

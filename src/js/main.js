@@ -34,7 +34,7 @@ async function startGame() {
         ui.showPageLoader("세계관 구성 중...");
         const worldBuildContext = [{ role: "user", parts: [{ text: `장르: ${genre}\n모험: ${adventure}` }] }];
         
-        const briefJsonResponse = await api.callGenerativeAPI(worldBuildContext, cfg.worldBuilderSystemPrompt, !!state.userApiKey);
+        const briefJsonResponse = await api.callGenerativeAPI(worldBuildContext, cfg.worldBuilderSystemPrompt, false, true);
         
         if (!briefJsonResponse) throw new Error("캠페인 생성 AI로부터 응답을 받지 못했습니다.");
 
@@ -102,7 +102,7 @@ export async function processTurn(userText, isFirstScene = false) {
         const previousDadSnapshot = isFirstScene ? state.initialDadSnapshot : state.sceneArchive[state.currentSceneIndex].dadSnapshot;
 
         const storyContext = buildStoryContext(userText, previousDadSnapshot);
-        const storyResponse = await api.callGenerativeAPI(storyContext, cfg.storyGeneratorSystemPrompt, !!state.userApiKey);
+        const storyResponse = await api.callGenerativeAPI(storyContext, cfg.storyGeneratorSystemPrompt, false, true);
         if (!storyResponse) throw new Error("첫 번째 API(서사 생성)로부터 응답을 받지 못했습니다.");
         const { title, story } = utils.parseModelResponse(storyResponse);
         
@@ -148,18 +148,9 @@ export async function processTurn(userText, isFirstScene = false) {
 async function finishSceneGeneration(sceneIndex, previousDadSnapshot, story, storyResponse) {
     try {
         const analysisContext = buildAnalysisContext(story, previousDadSnapshot);
-        let analysisResponse;
-        try {
-            analysisResponse = await api.callGenerativeAPI(analysisContext, cfg.analysisSystemPrompt, false);
-        } catch (error) {
-            if (error instanceof api.ApiError && error.status === 429 && state.userApiKey) {
-                console.warn("내부 API(분석) 할당량 초과. API 키를 사용하여 재시도합니다.");
-                analysisResponse = await api.callGenerativeAPI(analysisContext, cfg.analysisSystemPrompt, true);
-            } else {
-                throw error;
-            }
-        }
-        if (!analysisResponse) throw new Error("2차 API(분석)로부터 응답을 받지 못했습니다.");
+        // 통합된 폴백 시스템 사용
+        const analysisResponse = await api.callGenerativeAPI(analysisContext, cfg.analysisSystemPrompt, false, true);
+        if (!analysisResponse) throw new Error("두 번째 API(분석)로부터 응답을 받지 못했습니다.");
         const analysisResult = utils.parseModelResponse(analysisResponse);
 
         const newDadSnapshot = mergeDadSnapshot(previousDadSnapshot, analysisResult.newAssets);
@@ -349,25 +340,21 @@ async function processTask(task, dadSnapshot) {
     }
 
     try {
-        let imageUrl = await api.callImageAPI(promptData, referenceImages, false, imageCacheKey);
+        // 폴백 기능이 내장된 새로운 API 함수 사용
+        const imageUrl = await api.callImageAPI(promptData, referenceImages, false, imageCacheKey, true);
         state.imageCache.set(imageCacheKey, imageUrl);
     } catch (error) {
-        if (error instanceof api.ApiError && error.status === 429 && state.userApiKey) {
-            console.warn(`내부 이미지 API 할당량 초과 (${task.assetId}). API 키를 사용하여 재시도합니다.`);
-            try {
-                const imageUrl = await api.callImageAPI(promptData, referenceImages, true, imageCacheKey);
-                state.imageCache.set(imageCacheKey, imageUrl);
-            } catch (retryError) {
-                 console.error(`Image API retry failed for task: ${task.assetId}`, retryError);
-                 state.imageCache.set(imageCacheKey, "https://placehold.co/1200x1800/ff0000/FFF?text=Gen+Failed");
+        console.error(`이미지 생성 실패 (${task.assetId}):`, error);
+        state.imageCache.set(imageCacheKey, "https://placehold.co/1200x1800/ff0000/FFF?text=Gen+Failed");
+
+        // API 키가 없고 할당량 초과인 경우 사용자에게 알림
+        if (error instanceof api.ApiError && !state.userApiKey) {
+            if (error.status === 429) {
+                alert("내부 API 할당량이 소진되었습니다. 설정에서 Gemini API 키를 입력하시면 계속 사용할 수 있습니다.");
+            } else {
+                alert("이미지 생성 중 오류가 발생했습니다. 설정에서 API 키를 입력하시면 더 안정적으로 사용할 수 있습니다.");
             }
-        } else {
-            console.error(`Failed to generate image for task: ${task.assetId}`, error);
-            state.imageCache.set(imageCacheKey, "https://placehold.co/1200x1800/ff0000/FFF?text=Gen+Failed");
-            if (error instanceof api.ApiError && !state.userApiKey) {
-                 alert("이미지 생성 중 오류가 발생했습니다. 내부 API 사용량이 소진되었을 수 있습니다. 설정에서 API 키를 입력하시면 계속할 수 있습니다.");
-                 dom.settingsModal.classList.remove('hidden');
-            }
+            dom.settingsModal.classList.remove('hidden');
         }
     }
 }
