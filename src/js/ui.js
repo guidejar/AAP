@@ -39,7 +39,7 @@ export function renderScene(index) {
             }, 300);
         }
         dom.imageLoader.classList.add('hidden');
-        renderHintPanel(scene.hints);
+        
         renderChoices(scene.choices, (isLatestScene || state.isBranchingActive) && !state.isGenerating);
     } else {
         dom.imageLoader.classList.remove('hidden');
@@ -94,69 +94,9 @@ export function updateGlobalLoadingState() {
     }
 }
 
-function renderHintPanel(hints) {
-    dom.hintPanel.innerHTML = '';
-    if (!hints) return;
+/* The 'renderHintPanel' function was removed because the hint panel is obsolete in the new UI. */
 
-    let finalHtml = '';
-    const enabledItemClasses = 'bg-gray-700/80 border-gray-600 hover:bg-gray-600 hover:border-gray-500 cursor-pointer';
-    const disabledItemClasses = 'bg-gray-800/60 border-gray-700/50 text-gray-500 cursor-default';
-    const infoItemClasses = 'bg-gray-700/40 border-gray-600 text-gray-300 cursor-default';
-
-    if (hints.characters && hints.characters.length > 0) {
-        finalHtml += `
-            <div>
-                <h3 class="font-bold text-xl mb-3 border-b border-gray-700 pb-2">캐릭터</h3>
-                <div class="flex flex-wrap gap-2">
-                    ${hints.characters.map(item => `
-                        <span class="js-tooltip-trigger ${infoItemClasses}" data-tooltip="${item.tooltip || '정보 없음'}">
-                            <span class="font-semibold text-white">${item.name || 'N/A'}</span>: ${item.status || ''}
-                        </span>
-                    `).join('')}
-                </div>
-            </div>`;
-    }
-
-    const createHintSection = (title, items, category) => {
-        if (!items || items.length === 0) return '';
-        return `
-            <div class="mt-6">
-                <h3 class="font-bold text-xl mb-3 border-b border-gray-700 pb-2">${title}</h3>
-                <div class="flex flex-wrap gap-2">
-                    ${items.map(item => `
-                        <span class="js-tooltip-trigger ${item.usable ? enabledItemClasses : disabledItemClasses}" data-tooltip="${item.tooltip || '정보 없음'}">
-                            ${item.name || 'N/A'}
-                            ${category === 'skills' && item.owner ? ` <span class="text-xs opacity-70">(${item.owner})</span>` : ''}
-                        </span>
-                    `).join('')}
-                </div>
-            </div>`;
-    };
-    
-    finalHtml += createHintSection('스킬', hints.skills, 'skills');
-    finalHtml += createHintSection('인벤토리', hints.inventory, 'inventory');
-
-    dom.hintPanel.innerHTML = finalHtml;
-    setupTooltipListeners();
-}
-
-function setupTooltipListeners() {
-    const tooltipTriggers = document.querySelectorAll('.js-tooltip-trigger');
-    tooltipTriggers.forEach(trigger => {
-        trigger.addEventListener('mouseover', (e) => {
-            const tooltipText = e.currentTarget.dataset.tooltip;
-            dom.globalTooltip.textContent = tooltipText;
-            dom.globalTooltip.classList.add('visible');
-        });
-        trigger.addEventListener('mousemove', (e) => {
-            dom.globalTooltip.style.left = `${e.clientX + 15}px`;
-            dom.globalTooltip.style.top = `${e.clientY + 15}px`;
-        });
-        trigger.addEventListener('mouseout', () => {
-            dom.globalTooltip.classList.remove('visible');
-        });
-    });
-}
+/* The 'setupTooltipListeners' function was removed as it was a dependency of the obsolete renderHintPanel. */
 
 export function showPageLoader(text) { 
     dom.pageLoaderText.textContent = text; 

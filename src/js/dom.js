@@ -63,7 +63,6 @@ export const assetPipelineViewer = document.getElementById('asset-pipeline-viewe
 export const imageCacheViewer = document.getElementById('image-cache-viewer');
 
 // 설정 관련 요소
-export const settingsBtnFloating = document.getElementById('settings-btn-floating');
 export const settingsModal = document.getElementById('settings-modal');
 export const closeSettingsBtn = document.getElementById('close-settings-btn');
 export const apiKeySetupInput = document.getElementById('api-key-setup-input');
@@ -79,3 +78,7 @@ export const globalTooltip = document.getElementById('global-tooltip');
 export const imageViewerModal = document.getElementById('image-viewer-modal');
 export const modalImageContent = document.getElementById('modal-image-content');
 export const closeImageViewerBtn = document.getElementById('close-image-viewer');
+
+// New Layout Elements from Refactoring
+export const mainMenuBtns = document.querySelectorAll('.main-menu-btn');
+export const imageArea = document.querySelector('.image-section');

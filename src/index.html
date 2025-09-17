@@ -20,10 +20,9 @@
 
     <input type="file" id="load-input" class="hidden" accept=".json">
 
-    <button id="settings-btn-floating" class="p-2 rounded-full bg-gray-800/50 hover:bg-gray-700 transition-colors backdrop-blur-sm" title="환경설정 (ESC)">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="text-white" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/><path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.902 3.433 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.892 3.433-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c-1.79-.527-1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.892-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.115 2.692l.319.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.115l-.094.319c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"/>
-        </svg>
-    </button>
+        <input type="file" id="load-input" class="hidden" accept=".json">
+
+    
 
     <!-- 시작 화면 -->
     <div id="setup-screen" class="w-screen h-screen flex flex-col items-center justify-center text-center p-4">
@@ -41,65 +40,68 @@
     </div>
 
     <!-- 메인 화면 -->
-    <div id="story-screen" class="hidden w-screen h-screen grid md:grid-cols-3 grid-rows-[minmax(0,_1fr)_minmax(0,_2fr)] md:grid-rows-1">
+    <div id="story-screen" class="hidden w-screen h-screen flex flex-col">
+  
+  <div class="flex-grow flex">
+    
+    <div class="flex-[2] flex flex-col bg-gray-800/50 p-6">
+      
+      <div class="flex items-center justify-between border-b border-gray-600 pb-4 mb-4">
+        <button id="prev-btn" class="p-2 rounded-full hover:bg-gray-700 transition-colors disabled:opacity-30">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/></svg>
+        </button>
+        <h2 id="scene-title" class="text-2xl font-bold text-center">이야기 시작</h2>
+        <button id="next-btn" class="p-2 rounded-full hover:bg-gray-700 transition-colors disabled:opacity-30">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/></svg>
+        </button>
+      </div>
+      
+      
+      <div class="flex-grow overflow-y-auto pr-2">
+        <p id="story-output" class="text-lg leading-relaxed">
+          모험을 시작하려면 하단의 입력창에 원하는 내용을 입력하고 전송 버튼을 누르세요.
+        </p>
         
-        <div id="illustration-panel" class="md:col-span-1 row-span-1 relative flex items-center justify-center bg-black overflow-hidden">
-            <img id="story-illustration" src="https://placehold.co/1200x1800/000000/FFF?text=Ready?" alt="이야기 삽화" class="w-full h-full object-cover transition-opacity duration-500">
-            <div id="image-loader" class="loading-overlay hidden">
-                <div class="text-center">
-                    <svg class="animate-spin h-8 w-8 text-white mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                    <p id="image-loader-text" class="mt-2 text-sm text-gray-400">새로운 삽화를 생성하는 중...</p>
-                </div>
-            </div>
-            <pre id="prompt-overlay" class="hidden absolute top-0 left-0 right-0 bg-black/70 text-white p-4 text-xs font-mono whitespace-pre-wrap break-all max-h-full overflow-y-auto"></pre>
+        
+        <div id="choice-container" class="mt-4 flex flex-wrap gap-2"></div>
+        
+        
+        <div id="debug-output-container" class="hidden mt-4">
+          
         </div>
-
-        <div id="story-panel" class="md:col-span-1 row-span-1 flex flex-col bg-gray-800/50 p-6 md:p-8">
-            <div class="flex items-center justify-between border-b border-gray-600 pb-4 mb-4">
-                <button id="prev-btn" class="p-2 rounded-full hover:bg-gray-700 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/></svg></button>
-                <h2 id="scene-title" class="text-2xl font-bold text-center">이야기 시작</h2>
-                <button id="next-btn" class="p-2 rounded-full hover:bg-gray-700 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/></svg></button>
-            </div>
-            <div class="flex-grow overflow-y-auto pr-2">
-                <p id="story-output" class="text-lg leading-relaxed">모험을 시작하려면 오른쪽 하단의 입력창에 원하는 내용을 입력하고 전송 버튼을 누르세요.</p>
-                <div id="debug-output-container" class="hidden mt-4">
-                    <h4 class="font-bold text-sm text-yellow-400 border-t border-yellow-700 pt-2 mt-2">DEBUG: LLM INPUT</h4>
-                    <pre id="debug-input-text" class="bg-black/50 p-2 rounded text-xs font-mono whitespace-pre-wrap break-all"></pre>
-                    <h4 class="font-bold text-sm text-yellow-400 pt-2 mt-2">DEBUG: LLM RAW OUTPUT (JSON)</h4>
-                    <pre id="debug-output-text" class="bg-black/50 p-2 rounded text-xs font-mono whitespace-pre-wrap break-all"></pre>
-                    <h4 class="font-bold text-sm text-green-400 border-t border-green-700 pt-2 mt-2">DEBUG: PARSED ASSET PIPELINE</h4>
-                    <pre id="asset-pipeline-viewer" class="bg-black/50 p-2 rounded text-xs font-mono whitespace-pre-wrap break-all"></pre>
-                    <h4 class="font-bold text-sm text-cyan-400 border-t border-cyan-700 pt-2 mt-2">DEBUG: IMAGE CACHE</h4>
-                    <div id="image-cache-viewer" class="bg-black/50 p-2 rounded text-xs font-mono whitespace-pre-wrap break-all flex flex-col gap-1"></div>
-                </div>
-            </div>
-        </div>
-
-        <div id="right-panel" class="md:col-span-1 row-span-2 md:row-span-1 flex flex-col bg-gray-900/80 p-6 md:p-8">
-            <div id="hint-panel" class="flex-grow overflow-y-auto space-y-6"></div>
-            
-            <div id="action-panel" class="flex-shrink-0 mt-6">
-                <div id="input-loader" class="hidden flex flex-col items-center justify-center h-[116px] bg-gray-800/50 rounded-lg">
-                    <svg class="animate-spin h-8 w-8 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                    <p id="input-loader-text" class="mt-2 text-sm text-gray-400">새로운 이야기를 생성하는 중...</p>
-                </div>
-                <div id="input-container" class="input-panel rounded-lg shadow-2xl overflow-hidden">
-                    <div id="choice-container" class="p-4 pb-2 flex flex-wrap gap-2"></div>
-                    <form id="story-form" class="p-4 pt-2 flex flex-col gap-2">
-                        <textarea id="user-input" placeholder="다음 행동을 입력하세요... (Enter: 전송, Shift+Enter: 줄바꿈)" class="w-full p-3 bg-gray-800/80 border border-gray-600 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500" rows="2" disabled></textarea>
-                        <button id="send-btn" type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300" disabled>전송</button>
-                    </form>
-                </div>
-                <div id="past-action-container" class="hidden">
-                    <p class="text-gray-400 mb-2">당신이 한 행동:</p>
-                    <div class="p-4 bg-gray-800/70 rounded-lg italic text-gray-300">
-                        <p id="past-action-text"></p>
-                    </div>
-                    <button id="branch-btn" class="hidden mt-4 w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">여기서 다른 이야기 만들기</button>
-                </div>
-            </div>
-        </div>
+      </div>
     </div>
+    
+    
+    <div class="flex-1 relative flex items-center justify-center bg-black overflow-hidden">
+      <img id="story-illustration" src="https://placehold.co/1200x1800/000000/FFF?text=Ready?" 
+           alt="이야기 삽화" class="w-full h-full object-cover transition-opacity duration-500">
+      <div id="image-loader" class="loading-overlay hidden">
+        <div class="text-center">
+          <svg class="animate-spin h-8 w-8 text-white mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+          <p id="image-loader-text" class="mt-2 text-sm text-gray-400">새로운 삽화를 생성하는 중...</p>
+        </div>
+      </div>
+      <pre id="prompt-overlay" class="hidden absolute top-0 left-0 right-0 bg-black/70 text-white p-4 text-xs font-mono whitespace-pre-wrap break-all max-h-full overflow-y-auto"></pre>
+    </div>
+  </div>
+
+  
+  <div id="input-panel" class="bg-gray-900 p-4 flex-shrink-0">
+    <div class="flex items-center space-x-2">
+      <textarea id="user-input" 
+                class="flex-grow p-2 rounded-lg bg-gray-700 text-white border border-gray-600 
+                       focus:outline-none focus:border-blue-500 resize-none overflow-hidden" 
+                placeholder="이야기를 이어나갈 행동을 입력하세요..." rows="1"></textarea>
+      <button id="send-button" 
+              class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg 
+                     transition-colors duration-200">
+        전송
+      </button>
+    </div>
+    <div id="error-message" class="text-red-400 text-sm mt-2 hidden"></div>
+  </div>
+</div>
 
     <!-- 환경설정 모달 -->
     <div id="settings-modal" class="hidden">
