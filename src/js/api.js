@@ -13,6 +13,7 @@
  */
 
 import * as state from './state.js';
+import * as debug from './debug.js';
 
 /**
  * 프롬프트 데이터를 나노바나나 친화적인 자연어로 변환하는 함수
@@ -151,6 +152,9 @@ export class ApiError extends Error {
  * @throws {Error} 그 외 네트워크 오류 등
  */
 export async function callGenerativeAPI(context, systemPrompt, useApiKey) {
+    const operation = 'text_api_call';
+    const performanceMarkId = debug.startPerformanceMark(operation);
+
     if (useApiKey && !state.userApiKey) {
         throw new Error("API 키가 설정되지 않았습니다. 설정에서 키를 입력해주세요.");
     }
@@ -164,36 +168,94 @@ export async function callGenerativeAPI(context, systemPrompt, useApiKey) {
         systemInstruction: { parts: [{ text: systemPrompt }] }
     };
 
+    const requestBody = JSON.stringify(payload);
+    const requestSize = new Blob([requestBody]).size;
+
     try {
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: requestBody
         });
+
+        const performanceLog = debug.endPerformanceMark(operation);
 
         if (!response.ok) {
             const errorBody = await response.text();
+
+            // 상세 API 에러 로깅
+            debug.logApiCall('text', modelName, false, {
+                duration: performanceLog?.duration,
+                requestSize,
+                statusCode: response.status,
+                errorMessage: `API 호출 실패 (${response.status})`,
+                errorBody,
+                payload: state.isDebugMode ? payload : null
+            });
+
             console.error(`API Error (${modelName}, Status: ${response.status}):`, errorBody);
             throw new ApiError(`API 호출 실패`, response.status, modelName);
         }
 
         const result = await response.json();
+        const responseSize = new Blob([JSON.stringify(result)]).size;
         const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
         if (!text) {
             const blockReason = result.promptFeedback?.blockReason;
+            const errorMessage = blockReason ? `콘텐츠 생성 실패: ${blockReason}` : '응답에 텍스트 콘텐츠가 없습니다';
+
+            debug.logApiCall('text', modelName, false, {
+                duration: performanceLog?.duration,
+                requestSize,
+                responseSize,
+                statusCode: response.status,
+                errorMessage,
+                payload: state.isDebugMode ? payload : null
+            });
+
             if (blockReason) {
-                throw new ApiError(`콘텐츠 생성 실패: ${blockReason}`, null, modelName);
+                throw new ApiError(errorMessage, null, modelName);
             }
-            console.error(`API Error (${modelName}): 응답에 텍스트 콘텐츠가 없습니다.`, result);
+            console.error(`API Error (${modelName}): ${errorMessage}`, result);
             throw new Error('API로부터 유효한 텍스트 응답을 받지 못했습니다.');
         }
+
+        // 성공 로깅
+        debug.logApiCall('text', modelName, true, {
+            duration: performanceLog?.duration,
+            requestSize,
+            responseSize,
+            statusCode: response.status,
+            payload: state.isDebugMode ? payload : null
+        });
+
         return text;
 
     } catch (error) {
-        if (error instanceof ApiError) throw error;
-        console.error(`API Call Error (${modelName}):`, error);
-        throw new Error(`API 호출 중 네트워크 오류가 발생했습니다. (${modelName})`);
+        // 네트워크 에러 등 예외적인 경우 로깅
+        if (!(error instanceof ApiError)) {
+            const performanceLog = debug.endPerformanceMark(operation);
+            debug.logError(operation, error, {
+                modelName,
+                requestSize,
+                useApiKey,
+                systemPromptLength: systemPrompt?.length || 0,
+                contextLength: JSON.stringify(context).length
+            });
+
+            debug.logApiCall('text', modelName, false, {
+                duration: performanceLog?.duration,
+                requestSize,
+                errorMessage: error.message,
+                stackTrace: error.stack,
+                payload: state.isDebugMode ? payload : null
+            });
+
+            console.error(`API Call Error (${modelName}):`, error);
+            throw new Error(`API 호출 중 네트워크 오류가 발생했습니다. (${modelName})`);
+        }
+        throw error;
     }
 }
 
@@ -206,7 +268,10 @@ export async function callGenerativeAPI(context, systemPrompt, useApiKey) {
  * @throws {ApiError} API 호출 실패 시
  * @throws {Error} 그 외 네트워크 오류 등
  */
-export async function callImageAPI(promptData, referenceImages = [], useApiKey = false) {
+export async function callImageAPI(promptData, referenceImages = [], useApiKey = false, cacheKey = null) {
+    const operation = 'image_api_call';
+    const performanceMarkId = debug.startPerformanceMark(operation);
+
     if (useApiKey && !state.userApiKey) {
         throw new Error("API 키가 설정되지 않았습니다. 설정에서 키를 입력해주세요.");
     }
@@ -234,32 +299,101 @@ export async function callImageAPI(promptData, referenceImages = [], useApiKey =
         generationConfig: { responseModalities: ['IMAGE'] }
     };
 
+    const requestBody = JSON.stringify(payload);
+    const requestSize = new Blob([requestBody]).size;
+
     try {
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: requestBody
         });
+
+        const performanceLog = debug.endPerformanceMark(operation);
 
         if (!response.ok) {
             const errorBody = await response.text();
+
+            // 이미지 프롬프트 실패 로깅
+            debug.logImagePrompt(cacheKey || 'unknown', promptData, naturalPrompt, referenceImages, null);
+
+            // API 호출 실패 로깅
+            debug.logApiCall('image', modelName, false, {
+                duration: performanceLog?.duration,
+                requestSize,
+                statusCode: response.status,
+                errorMessage: `이미지 API 호출 실패 (${response.status})`,
+                errorBody,
+                payload: state.isDebugMode ? payload : null
+            });
+
             console.error(`Image API Error (${modelName}, Status: ${response.status}):`, errorBody);
             throw new ApiError(`이미지 API 호출 실패`, response.status, modelName);
         }
 
         const result = await response.json();
+        const responseSize = new Blob([JSON.stringify(result)]).size;
         const imagePart = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
 
         if (imagePart) {
-            return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+            const dataUrl = `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+
+            // 이미지 프롬프트 성공 로깅 (가장 중요한 기능)
+            debug.logImagePrompt(cacheKey || 'unknown', promptData, naturalPrompt, referenceImages, dataUrl);
+
+            // API 호출 성공 로깅
+            debug.logApiCall('image', modelName, true, {
+                duration: performanceLog?.duration,
+                requestSize,
+                responseSize,
+                statusCode: response.status,
+                payload: state.isDebugMode ? payload : null
+            });
+
+            return dataUrl;
         }
+
+        // 응답에 이미지 데이터가 없는 경우
+        debug.logImagePrompt(cacheKey || 'unknown', promptData, naturalPrompt, referenceImages, null);
+        debug.logApiCall('image', modelName, false, {
+            duration: performanceLog?.duration,
+            requestSize,
+            responseSize,
+            statusCode: response.status,
+            errorMessage: '응답에 이미지 데이터가 없습니다',
+            payload: state.isDebugMode ? payload : null
+        });
 
         console.error(`Image API Error (${modelName}): 응답에 이미지 데이터가 없습니다.`, result);
         throw new Error('이미지 API로부터 유효한 응답을 받지 못했습니다.');
 
     } catch (error) {
-        if (error instanceof ApiError) throw error;
-        console.error(`Image API Call Error (${modelName}):`, error);
-        throw new Error(`이미지 API 호출 중 네트워크 오류가 발생했습니다. (${modelName})`);
+        if (!(error instanceof ApiError)) {
+            const performanceLog = debug.endPerformanceMark(operation);
+
+            // 네트워크 에러 등 예외적인 경우 로깅
+            debug.logError(operation, error, {
+                modelName,
+                cacheKey,
+                requestSize,
+                useApiKey,
+                naturalPromptLength: naturalPrompt?.length || 0,
+                referenceImageCount: referenceImages.length,
+                mission: promptData.mission
+            });
+
+            debug.logImagePrompt(cacheKey || 'unknown', promptData, naturalPrompt, referenceImages, null);
+            debug.logApiCall('image', modelName, false, {
+                duration: performanceLog?.duration,
+                requestSize,
+                errorMessage: error.message,
+                stackTrace: error.stack,
+                payload: state.isDebugMode ? payload : null
+            });
+
+            console.error(`Image API Call Error (${modelName}):`, error);
+            throw new Error(`이미지 API 호출 중 네트워크 오류가 발생했습니다. (${modelName})`);
+        }
+        throw error;
     }
 }

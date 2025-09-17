@@ -62,6 +62,16 @@ export const debugOutputText = document.getElementById('debug-output-text');
 export const assetPipelineViewer = document.getElementById('asset-pipeline-viewer');
 export const imageCacheViewer = document.getElementById('image-cache-viewer');
 
+// 강화된 디버그 요소들
+export const latestImagePrompt = document.getElementById('latest-image-prompt');
+export const apiStats = document.getElementById('api-stats');
+export const apiCallLog = document.getElementById('api-call-log');
+export const performanceLog = document.getElementById('performance-log');
+export const errorLog = document.getElementById('error-log');
+export const downloadDebugLogBtn = document.getElementById('download-debug-log-btn');
+export const clearDebugLogBtn = document.getElementById('clear-debug-log-btn');
+export const refreshDebugViewBtn = document.getElementById('refresh-debug-view-btn');
+
 // 설정 관련 요소
 // Floating settings button removed in new layout
 // export const settingsBtnFloating = document.getElementById('settings-btn-floating');

@@ -14,6 +14,7 @@
 
 import * as dom from './dom.js';
 import * as state from './state.js';
+import * as debug from './debug.js';
 import { processTurn } from './main.js';
 
 /**
@@ -255,49 +256,27 @@ export function toggleDebugView(show) {
     if (!scene) return;
 
     if (show) {
+        // 기존 디버그 정보
         if (dom.promptOverlay) {
             dom.promptOverlay.textContent = `[DISPLAY_IMAGE_ID]: ${scene.displayImageId || 'N/A'}`;
             dom.promptOverlay.classList.remove('hidden');
         }
 
         if (dom.debugInputText) {
-            dom.debugInputText.parentElement.querySelector('h4').textContent = 'DEBUG: 1차 API 응답 (서사)';
             dom.debugInputText.textContent = scene.raw_story_response || 'N/A';
         }
 
         if (dom.debugOutputText) {
-            dom.debugOutputText.parentElement.querySelector('h4').textContent = 'DEBUG: 2차 API 응답 (분석)';
             dom.debugOutputText.textContent = scene.raw_analysis_response || 'N/A';
         }
 
         if (dom.assetPipelineViewer) {
-            dom.assetPipelineViewer.parentElement.querySelector('h4').textContent = 'DEBUG: 작업 큐 (Task Queue)';
             dom.assetPipelineViewer.textContent = JSON.stringify(scene.taskQueue, null, 2) || 'N/A';
         }
 
-        if (dom.imageCacheViewer) {
-            dom.imageCacheViewer.innerHTML = '';
-        }
-        if (dom.imageCacheViewer) {
-            if (state.imageCache.size === 0) {
-                dom.imageCacheViewer.textContent = 'Image cache is empty.';
-            } else {
-                state.imageCache.forEach((base64Data, id) => {
-                    const link = document.createElement('a');
-                    link.href = '#';
-                    link.textContent = id;
-                    link.className = 'text-cyan-400 hover:underline cursor-pointer';
-                    link.onclick = (e) => {
-                        e.preventDefault();
-                        if (dom.modalImageContent && dom.imageViewerModal) {
-                            dom.modalImageContent.src = base64Data;
-                            dom.imageViewerModal.classList.remove('hidden');
-                        }
-                    };
-                    dom.imageCacheViewer.appendChild(link);
-                });
-            }
-        }
+        // 강화된 디버그 정보 업데이트
+        updateEnhancedDebugView();
+
         if (dom.debugOutputContainer) {
             dom.debugOutputContainer.classList.remove('hidden');
         }
@@ -307,6 +286,101 @@ export function toggleDebugView(show) {
         }
         if (dom.debugOutputContainer) {
             dom.debugOutputContainer.classList.add('hidden');
+        }
+    }
+}
+
+/**
+ * 강화된 디버그 정보 업데이트 함수
+ */
+export function updateEnhancedDebugView() {
+    // 최신 이미지 프롬프트 표시
+    if (dom.latestImagePrompt) {
+        const latestPrompt = debug.debugLog.imagePrompts[debug.debugLog.imagePrompts.length - 1];
+        if (latestPrompt) {
+            const promptInfo = `Cache Key: ${latestPrompt.cacheKey}
+Mission: ${latestPrompt.mission}
+Timestamp: ${latestPrompt.timestamp}
+
+Natural Prompt:
+${latestPrompt.naturalPrompt}
+
+Success: ${latestPrompt.success ? '✅' : '❌'}
+${latestPrompt.errorMessage ? `Error: ${latestPrompt.errorMessage}` : ''}
+Reference Images: ${latestPrompt.referenceImageCount}`;
+            dom.latestImagePrompt.textContent = promptInfo;
+        } else {
+            dom.latestImagePrompt.textContent = '아직 이미지 프롬프트가 없습니다.';
+        }
+    }
+
+    // API 통계 업데이트
+    if (dom.apiStats) {
+        const stats = debug.getDebugStats();
+        dom.apiStats.textContent = `${stats.session.totalApiCalls}회 호출 | 성공률: ${stats.recent.successRate}% | 평균: ${stats.recent.avgResponseTime}ms`;
+    }
+
+    // API 호출 로그 (최근 10개)
+    if (dom.apiCallLog) {
+        const recentCalls = debug.debugLog.apiCalls.slice(-10).reverse();
+        dom.apiCallLog.innerHTML = '';
+        recentCalls.forEach(call => {
+            const div = document.createElement('div');
+            div.className = `p-1 rounded ${call.success ? 'bg-green-900/30 text-green-300' : 'bg-red-900/30 text-red-300'}`;
+            div.textContent = `${call.timestamp.substring(11, 19)} | ${call.type} | ${call.modelName} | ${call.success ? '✅' : '❌'} ${call.duration ? `${call.duration}ms` : ''} ${call.errorMessage || ''}`;
+            dom.apiCallLog.appendChild(div);
+        });
+    }
+
+    // 성능 로그 (최근 10개)
+    if (dom.performanceLog) {
+        const recentPerf = debug.debugLog.processingTimes.slice(-10).reverse();
+        dom.performanceLog.innerHTML = '';
+        recentPerf.forEach(perf => {
+            const div = document.createElement('div');
+            div.className = 'p-1 rounded bg-orange-900/30 text-orange-300';
+            div.textContent = `${perf.timestamp.substring(11, 19)} | ${perf.operation} | ${perf.duration}ms`;
+            dom.performanceLog.appendChild(div);
+        });
+    }
+
+    // 에러 로그 (최근 5개)
+    if (dom.errorLog) {
+        const recentErrors = debug.debugLog.errors.slice(-5).reverse();
+        dom.errorLog.innerHTML = '';
+        if (recentErrors.length === 0) {
+            dom.errorLog.textContent = '에러가 없습니다 ✅';
+        } else {
+            recentErrors.forEach(error => {
+                const div = document.createElement('div');
+                div.className = 'p-2 rounded bg-red-900/30 text-red-300 border border-red-700/50';
+                div.innerHTML = `<div class="font-bold">${error.timestamp.substring(11, 19)} | ${error.operation}</div>
+<div class="text-xs mt-1">${error.message}</div>`;
+                dom.errorLog.appendChild(div);
+            });
+        }
+    }
+
+    // 이미지 캐시 업데이트
+    if (dom.imageCacheViewer) {
+        dom.imageCacheViewer.innerHTML = '';
+        if (state.imageCache.size === 0) {
+            dom.imageCacheViewer.textContent = 'Image cache is empty.';
+        } else {
+            state.imageCache.forEach((base64Data, id) => {
+                const link = document.createElement('a');
+                link.href = '#';
+                link.textContent = id;
+                link.className = 'text-cyan-400 hover:underline cursor-pointer';
+                link.onclick = (e) => {
+                    e.preventDefault();
+                    if (dom.modalImageContent && dom.imageViewerModal) {
+                        dom.modalImageContent.src = base64Data;
+                        dom.imageViewerModal.classList.remove('hidden');
+                    }
+                };
+                dom.imageCacheViewer.appendChild(link);
+            });
         }
     }
 }

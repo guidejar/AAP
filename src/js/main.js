@@ -18,6 +18,7 @@ import * as cfg from './config.js';
 import * as ui from './ui.js';
 import * as api from './api.js';
 import * as utils from './utils.js';
+import * as debug from './debug.js';
 
 // --- SECTION: 핵심 게임 흐름 (Orchestrator) (v4) ---
 
@@ -102,7 +103,7 @@ export async function processTurn(userText, isFirstScene = false) {
 
         const storyContext = buildStoryContext(userText, previousDadSnapshot);
         const storyResponse = await api.callGenerativeAPI(storyContext, cfg.storyGeneratorSystemPrompt, !!state.userApiKey);
-        if (!storyResponse) throw new Error("1차 API(서사 생성)로부터 응답을 받지 못했습니다.");
+        if (!storyResponse) throw new Error("첫 번째 API(서사 생성)로부터 응답을 받지 못했습니다.");
         const { title, story } = utils.parseModelResponse(storyResponse);
         
         if (isFirstScene) ui.hidePageLoader();
@@ -348,13 +349,13 @@ async function processTask(task, dadSnapshot) {
     }
 
     try {
-        let imageUrl = await api.callImageAPI(promptData, referenceImages, false);
+        let imageUrl = await api.callImageAPI(promptData, referenceImages, false, imageCacheKey);
         state.imageCache.set(imageCacheKey, imageUrl);
     } catch (error) {
         if (error instanceof api.ApiError && error.status === 429 && state.userApiKey) {
             console.warn(`내부 이미지 API 할당량 초과 (${task.assetId}). API 키를 사용하여 재시도합니다.`);
             try {
-                const imageUrl = await api.callImageAPI(promptData, referenceImages, true);
+                const imageUrl = await api.callImageAPI(promptData, referenceImages, true, imageCacheKey);
                 state.imageCache.set(imageCacheKey, imageUrl);
             } catch (retryError) {
                  console.error(`Image API retry failed for task: ${task.assetId}`, retryError);
@@ -483,22 +484,22 @@ function showToolbarModal(action) {
 // --- SECTION: 이벤트 리스너 등록 (v4) ---
 
 function initializeEventListeners() {
-    console.log('Initializing event listeners...');
-    console.log('startBtn element:', dom.startBtn);
+    console.log('이벤트 리스너 초기화 중...');
+    console.log('시작 버튼 요소:', dom.startBtn);
 
     if (dom.startBtn) {
         dom.startBtn.addEventListener('click', (e) => {
-            console.log('Start button clicked!', e);
+            console.log('시작 버튼 클릭됨!', e);
             startGame();
         });
-        console.log('Start button event listener added');
+        console.log('시작 버튼 이벤트 리스너 추가됨');
 
         // 추가 테스트: 버튼에 마우스 오버 이벤트도 추가
         dom.startBtn.addEventListener('mouseover', () => {
-            console.log('Start button hovered');
+            console.log('시작 버튼 호버됨');
         });
     } else {
-        console.error('Start button not found!');
+        console.error('시작 버튼을 찾을 수 없습니다!');
     }
     dom.loadBtn.addEventListener('click', () => dom.loadInput.click());
     dom.loadInput.addEventListener('change', utils.handleFileLoad);
@@ -534,6 +535,32 @@ function initializeEventListeners() {
         ui.renderScene(state.currentSceneIndex);
         dom.userInput.placeholder = "다른 선택지를 고르거나, 새로운 행동을 입력하세요.";
     });
+
+    // 강화된 디버그 컨트롤 이벤트 리스너
+    if (dom.downloadDebugLogBtn) {
+        dom.downloadDebugLogBtn.addEventListener('click', () => {
+            debug.downloadDebugLog();
+        });
+    }
+
+    if (dom.clearDebugLogBtn) {
+        dom.clearDebugLogBtn.addEventListener('click', () => {
+            if (confirm('디버그 로그를 모두 삭제하시겠습니까?')) {
+                debug.clearDebugLog();
+                if (state.isDebugMode) {
+                    ui.updateEnhancedDebugView();
+                }
+            }
+        });
+    }
+
+    if (dom.refreshDebugViewBtn) {
+        dom.refreshDebugViewBtn.addEventListener('click', () => {
+            if (state.isDebugMode) {
+                ui.updateEnhancedDebugView();
+            }
+        });
+    }
 
     dom.mainMenuBtns.forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -585,9 +612,9 @@ function initializeEventListeners() {
 
 // --- SECTION: 애플리케이션 초기화 ---
 
-console.log('Main.js loaded');
+console.log('Main.js 로드됨');
 
 window.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM Content Loaded');
+    console.log('DOM 콘텐츠 로드됨');
     initializeEventListeners();
 });
