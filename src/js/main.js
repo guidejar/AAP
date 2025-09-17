@@ -113,6 +113,38 @@ function initializeEventListeners() {
 
     // 입력 및 툴바 핸들러 초기화
     initializeInputHandler();
+
+    // 이벤트 위임을 사용하여 선택지 클릭 처리
+    const choicesContainer = document.getElementById('choices-container');
+    if (choicesContainer) {
+        choicesContainer.addEventListener('click', (e) => {
+            if (e.target.classList.contains('choice-button')) {
+                const textInput = document.getElementById('text-input');
+                if(textInput){
+                    textInput.value = e.target.textContent.trim().replace('💬', '').trim();
+                    textInput.focus();
+                    textInput.dispatchEvent(new Event('input', { bubbles: true })); // 입력창 확장 로직 트리거
+                }
+            }
+        });
+    }
 }
 
-document.addEventListener('DOMContentLoaded', initializeEventListeners);
+// 예시 선택지 렌더링 함수 (실제 데이터는 API로부터 받아옴)
+function renderChoices(choices) {
+    const choicesContainer = document.getElementById('choices-container');
+    if (!choicesContainer) return;
+    choicesContainer.innerHTML = ''; // 기존 선택지 초기화
+    choices.forEach(choice => {
+        const button = document.createElement('button');
+        button.className = 'choice-button';
+        button.textContent = `💬 \"${choice}\"`;
+        choicesContainer.appendChild(button);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    initializeEventListeners();
+    // --- 테스트용 코드 ---
+    renderChoices(['마을로 간다', '숲을 탐험한다', '휴식을 취한다']);
+});
