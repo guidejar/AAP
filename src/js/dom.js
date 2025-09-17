@@ -5,6 +5,7 @@
  * 
  * === 변경 히스토리 ===
  * 2025-09-14 14:06 - 초기 생성: VV3.md에서 DOM 요소 참조 부분 분리
+ * 2025-09-17 - 새로운 레이아웃에 맞게 DOM 요소 참조 업데이트
  * =====================
  */
 
@@ -38,21 +39,34 @@ export const storyOutputEl = document.getElementById('story-output');
 export const prevBtn = document.getElementById('prev-btn');
 export const nextBtn = document.getElementById('next-btn');
 
-// 패널 및 컨테이너 요소
-export const hintPanel = document.getElementById('hint-panel');
+// 선택지 컨테이너 (텍스트 영역 하단)
 export const choiceContainer = document.getElementById('choice-container');
+
+// 새로운 입력 관련 요소들
 export const inputLoader = document.getElementById('input-loader');
 export const inputLoaderText = document.getElementById('input-loader-text');
-export const inputContainer = document.getElementById('input-container');
+export const inputContainer = document.getElementById('input-container'); // 호환성 유지를 위해
 export const pastActionContainer = document.getElementById('past-action-container');
 export const pastActionText = document.getElementById('past-action-text');
 export const branchBtn = document.getElementById('branch-btn');
 
-// 입력창 관련 요소
-export const inputPanel = document.querySelector('.input-panel');
+// 입력창 관련 요소 (새로운 레이아웃)
 export const userInput = document.getElementById('user-input');
 export const storyForm = document.getElementById('story-form');
 export const sendBtn = document.getElementById('send-btn');
+
+// 툴바 관련 요소
+export const toolbarOverlay = document.getElementById('toolbar-overlay');
+export const overlayTitle = document.getElementById('overlay-title');
+export const overlayContent = document.getElementById('overlay-content');
+export const closeOverlay = document.getElementById('close-overlay');
+
+// 툴바 버튼들
+export const toolbarBtns = document.querySelectorAll('.toolbar-btn');
+
+// 기존 요소들 (호환성 유지)
+export const inputPanel = document.querySelector('.input-section'); // 기존 .input-panel 대신
+export const hintPanel = document.getElementById('choice-container'); // 기존 힌트패널 역할을 선택지가 대체
 
 // 디버그 및 오버레이 요소
 export const promptOverlay = document.getElementById('prompt-overlay');
