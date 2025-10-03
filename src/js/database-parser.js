@@ -12,22 +12,22 @@ export const DatabaseParser = {
             // JSON 응답 파싱
             const data = JSON.parse(llmResponse);
 
-            // 1. design 자동으로 chapters[] 배열에 추가
-            if (data.design) {
+            // 1. TRP_design 자동으로 chapters[] 배열에 추가
+            if (data.TRP_design) {
                 const chapterNumber = this.database.current.chapters.length + 1;
                 const chapterEntry = {
                     chapter_number: chapterNumber,
-                    arc_id: data.design.arc_id || `arc_01`,
+                    arc_id: data.TRP_design.arc_id || `arc_01`,
                     metadata: {
                         generation_id: crypto.randomUUID(),
                         parent_generation_id: chapterNumber > 1 ? this.database.current.chapters[chapterNumber - 2]?.metadata?.generation_id : null,
                         model: "gemini-2.5-pro",
                         timestamp: new Date().toISOString()
                     },
-                    summary: data.design.summary,
-                    scenes: data.design.scenes || [],
-                    threads: data.design.threads || {},
-                    introduced: data.design.introduced || {}
+                    summary: data.TRP_design.summary,
+                    scenes: data.TRP_design.scenes || [],
+                    threads: data.TRP_design.threads || {},
+                    introduced: data.TRP_design.introduced || {}
                 };
 
                 this.database.current.chapters.push(chapterEntry);
@@ -35,9 +35,9 @@ export const DatabaseParser = {
                 console.log(`챕터 ${chapterNumber} 추가됨`);
             }
 
-            // 2. db_commands 파싱 → DB 업데이트
-            if (data.db_commands && Array.isArray(data.db_commands)) {
-                for (const cmd of data.db_commands) {
+            // 2. TRP_db_commands 파싱 → DB 업데이트
+            if (data.TRP_db_commands && Array.isArray(data.TRP_db_commands)) {
+                for (const cmd of data.TRP_db_commands) {
                     this.executeDbUpdate(cmd);
                 }
             }
@@ -46,14 +46,14 @@ export const DatabaseParser = {
             const snapshot = this.database.createSnapshot(
                 pageIndex,
                 `snapshot_${Date.now()}`,
-                data.render?.title || `페이지 ${pageIndex + 1}`
+                data.TRP_render?.title || `페이지 ${pageIndex + 1}`
             );
 
             return {
                 success: true,
                 snapshot,
-                chapterAdded: !!data.design,
-                dbCommandsExecuted: data.db_commands?.length || 0
+                chapterAdded: !!data.TRP_design,
+                dbCommandsExecuted: data.TRP_db_commands?.length || 0
             };
         } catch (error) {
             console.error('DB 파싱 오류:', error);
@@ -222,32 +222,32 @@ ${JSON.stringify(dbState, null, 2)}
     getSystemPrompt() {
         return `You are a narrative AI system following Chimera Single-File Database workflow.
 
-**Step 1: design (Structured Design)**
+**Step 1: TRP_design (Structured Design)**
 - MUST be written entirely in English
 - Reference chapters[] for continuity
 - Structure: summary (one_line, narrative, character_developments, world_building)
 - scenes[]: scene_id, sequence, location_id, pov_character_id, description, mood, plot_developments[]
 - threads.active[]: thread_id, progress_percent
 - introduced: new character_ids, faction_ids, location_ids, concept_ids
-- design automatically added to chapters[]
+- TRP_design automatically added to chapters[]
 
-**Step 2: render (Localized Output)**
-- CHECK render_policy.RENDER_OUTPUT_LANGUAGE_MUST_BE: MUST write in KOREAN language ONLY
-- Transform design into creative, engaging narrative in KOREAN
+**Step 2: TRP_render (Localized Output)**
+- CHECK render_policy.RENDER_OUTPUT_LANGUAGE_MUST_BE
+- Transform TRP_design into creative, engaging narrative
 - Use terminology dictionaries for translation: character_names, location_names, faction_names
-- Output: title (KOREAN), creative_engaging_scenes (KOREAN)
+- Output: title, creative_engaging_scenes
 
-**Step 3: db_commands (Entity/Terminology Updates)**
-- New entity: {"target": "entities.characters", "operation": "set", "key": "C001", "value": {"name": "...", "description": "..."}}
-- Character name translation: {"target": "terminology.character_names", "operation": "set", "key": "Placeholder Character", "value": "플레이스홀더 캐릭터"}
-- Location name translation: {"target": "terminology.location_names", "operation": "set", "key": "Placeholder location", "value": "플레이스홀더 위치"}
-- Faction name translation: {"target": "terminology.faction_names", "operation": "set", "key": "Placeholder faction", "value": "플레이스홀더 팩션"}`;
+**Step 3: TRP_db_commands (Entity/Terminology Updates)**
+- New entity: {"target": "entities.characters", "operation": "set", "key": "C001", "value": {"name": "PLACEHOLDER_ENGLISH_NAME", "description": "PLACEHOLDER_DESCRIPTION"}}
+- Character name translation: {"target": "terminology.character_names", "operation": "set", "key": "PLACEHOLDER_ENGLISH_NAME", "value": "PLACEHOLDER_한글명"}
+- Location name translation: {"target": "terminology.location_names", "operation": "set", "key": "PLACEHOLDER_ENGLISH_NAME", "value": "PLACEHOLDER_한글명"}
+- Faction name translation: {"target": "terminology.faction_names", "operation": "set", "key": "PLACEHOLDER_ENGLISH_NAME", "value": "PLACEHOLDER_한글명"}`;
     },
 
     // DB 명령어 예시 (LLM에게 제공할 스키마)
     getCommandSchema() {
         return {
-            db_commands: {
+            TRP_db_commands: {
                 type: 'array',
                 description: '데이터베이스 변경 명령어 배열 (선택사항)',
                 items: {

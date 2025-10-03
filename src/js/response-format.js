@@ -2,8 +2,8 @@
 export const ResponseFormat = {
     type: "object",
     properties: {
-        // === 1단계: design (인터렉티브 소설 사고 프레임워크) ===
-        design: {
+        // === 1단계: TRP_design (인터렉티브 소설 사고 프레임워크) ===
+        TRP_design: {
             type: "object",
             properties: {
                 version: { type: "string", default: "1.0" },
@@ -165,22 +165,18 @@ export const ResponseFormat = {
             required: ["version", "mode", "context", "private_plan", "quality_gate"]
         },
 
-        // === 2단계: render (현지화 출력) ===
-        render: {
+        // === 2단계: TRP_render (현지화 출력) ===
+        TRP_render: {
             type: "object",
             properties: {
                 title: { type: "string" },
-                creative_engaging_scenes: { type: "string" },
-                situation_prompt: {
-                    type: "string",
-                    description: "Brief situation summary that naturally leads to presenting choices to the user. This should create anticipation for the upcoming decision point."
-                }
+                creative_engaging_scenes: { type: "string" }
             },
-            required: ["title", "creative_engaging_scenes", "situation_prompt"]
+            required: ["title", "creative_engaging_scenes"]
         },
 
-        // === 3단계: choices (선택지) ===
-        choices: {
+        // === 3단계: TRP_choices (선택지) ===
+        TRP_choices: {
             type: "array",
             items: {
                 type: "object",
@@ -221,8 +217,8 @@ export const ResponseFormat = {
             maxItems: 4
         },
 
-        // === 4단계: db_commands (DB 업데이트만) ===
-        db_commands: {
+        // === 4단계: TRP_db_commands (DB 업데이트만) ===
+        TRP_db_commands: {
             type: "array",
             items: {
                 type: "object",
@@ -239,8 +235,8 @@ export const ResponseFormat = {
             }
         },
 
-        // === 5단계: mentioned_entities (이번 턴에서 언급된 entity IDs) ===
-        mentioned_entities: {
+        // === 5단계: TRP_mentioned_entities (이번 턴에서 언급된 entity IDs) ===
+        TRP_mentioned_entities: {
             type: "object",
             properties: {
                 character_ids: {
@@ -266,5 +262,5 @@ export const ResponseFormat = {
             }
         }
     },
-    required: ["design", "render"]
+    required: ["TRP_design", "TRP_render"]
 };

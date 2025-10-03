@@ -19,7 +19,7 @@ export const ChatManager = {
     },
 
     async handleSendMessage() {
-        const { autoHeightTextarea, textDisplayArea } = this.elements;
+        const { autoHeightTextarea, textDisplayArea, sendBtn } = this.elements;
         const message = autoHeightTextarea.value.trim();
 
         if (!message) return;
@@ -27,19 +27,15 @@ export const ChatManager = {
         // 사용자 메시지 표시
         this.addMessage('user', message);
 
-        // 입력창 초기화
-        autoHeightTextarea.value = '';
-        autoHeightTextarea.style.height = 'auto';
-
-        // 로딩 표시
-        const loadingId = this.addLoadingMessage();
+        // 입력창 비활성화 및 로딩 표시
+        this.showInputLoading();
 
         try {
             // API 호출
             const response = await this.api.sendMessage(message);
 
-            // 로딩 메시지 제거
-            this.removeLoadingMessage(loadingId);
+            // 로딩 해제
+            this.hideInputLoading();
 
             // AI 응답 표시
             this.addMessage('assistant', response);
@@ -53,8 +49,8 @@ export const ChatManager = {
             }
 
         } catch (error) {
-            // 로딩 메시지 제거
-            this.removeLoadingMessage(loadingId);
+            // 로딩 해제
+            this.hideInputLoading();
 
             // 에러 메시지 표시
             this.addMessage('error', error.message);
@@ -113,39 +109,45 @@ export const ChatManager = {
         this.scrollToBottom();
     },
 
-    addLoadingMessage() {
-        const { textDisplayArea } = this.elements;
-        const loadingId = 'loading-' + Date.now();
+    showInputLoading() {
+        const { autoHeightTextarea, sendBtn } = this.elements;
 
-        const loadingDiv = document.createElement('div');
-        loadingDiv.id = loadingId;
-        loadingDiv.classList.add('message-item', 'animate-fadeIn');
-        loadingDiv.innerHTML = `
-            <div class="flex justify-start mb-2">
-                <div class="rounded-lg p-4" style="background-color: var(--bg-button); color: var(--text-secondary);">
-                    <div class="flex items-center gap-2">
-                        <div class="flex gap-1">
-                            <div class="w-2 h-2 rounded-full animate-pulse" style="background-color: var(--text-accent);"></div>
-                            <div class="w-2 h-2 rounded-full animate-pulse" style="background-color: var(--text-accent); animation-delay: 0.2s;"></div>
-                            <div class="w-2 h-2 rounded-full animate-pulse" style="background-color: var(--text-accent); animation-delay: 0.4s;"></div>
-                        </div>
-                        <span class="text-sm">응답 생성 중...</span>
-                    </div>
-                </div>
-            </div>
-        `;
+        // 입력창과 전송 버튼 비활성화
+        autoHeightTextarea.disabled = true;
+        sendBtn.disabled = true;
 
-        textDisplayArea.appendChild(loadingDiv);
-        this.scrollToBottom();
+        // 입력창 초기화 및 로딩 표시
+        autoHeightTextarea.value = '응답 생성 중...';
+        autoHeightTextarea.style.height = 'auto';
+        autoHeightTextarea.style.opacity = '0.6';
+        autoHeightTextarea.style.fontStyle = 'italic';
+        autoHeightTextarea.style.color = 'var(--text-secondary)';
 
-        return loadingId;
+        // 전송 버튼 스타일 변경
+        sendBtn.style.opacity = '0.5';
+        sendBtn.style.cursor = 'not-allowed';
     },
 
-    removeLoadingMessage(loadingId) {
-        const loadingDiv = document.getElementById(loadingId);
-        if (loadingDiv) {
-            loadingDiv.remove();
-        }
+    hideInputLoading() {
+        const { autoHeightTextarea, sendBtn } = this.elements;
+
+        // 입력창과 전송 버튼 활성화
+        autoHeightTextarea.disabled = false;
+        sendBtn.disabled = false;
+
+        // 입력창 초기화 및 스타일 복원
+        autoHeightTextarea.value = '';
+        autoHeightTextarea.style.height = 'auto';
+        autoHeightTextarea.style.opacity = '1';
+        autoHeightTextarea.style.fontStyle = 'normal';
+        autoHeightTextarea.style.color = '';
+
+        // 전송 버튼 스타일 복원
+        sendBtn.style.opacity = '1';
+        sendBtn.style.cursor = 'pointer';
+
+        // 포커스
+        autoHeightTextarea.focus();
     },
 
     scrollToBottom() {

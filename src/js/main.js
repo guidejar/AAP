@@ -51,7 +51,14 @@ document.addEventListener('DOMContentLoaded', () => {
         switchDebugToOverlayBtn: document.getElementById('switch-debug-to-overlay-btn'),
         // 세이브/로드 요소
         saveBtn: document.getElementById('save-btn'),
-        loadBtn: document.getElementById('load-btn')
+        loadBtn: document.getElementById('load-btn'),
+        // API 키 요소
+        apiKeyBtn: document.getElementById('api-key-btn'),
+        apiKeyModal: document.getElementById('api-key-modal'),
+        apiKeyInput: document.getElementById('api-key-input'),
+        saveApiKeyBtn: document.getElementById('save-api-key-btn'),
+        cancelApiKeyBtn: document.getElementById('cancel-api-key-btn'),
+        closeApiKeyModalBtn: document.getElementById('close-api-key-modal-btn')
     };
 
     // 테마 매니저 초기화
@@ -138,6 +145,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // 세이브/로드 매니저 초기화
     SaveLoadManager.init(elements);
 
+    // 이벤트 위임: contextOverlayPanel의 버튼 클릭 처리 (한 번만 등록)
+    elements.contextOverlayPanel.addEventListener('click', (e) => {
+        const target = e.target.closest('button');
+        if (!target) return;
+
+        if (target.id === 'close-context-overlay-btn') {
+            elements.contextOverlayPanel.classList.add('overlay-hidden');
+        }
+    });
+
     // 컨텍스트 윈도우 버튼 이벤트
     elements.contextWindowBtn.addEventListener('click', () => {
         // 다른 오버레이 닫기
@@ -155,20 +172,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (isHidden) {
             // 컨텍스트 윈도우 내용 렌더링
-            const contextData = ContextManager.buildDynamicContext();
+            const contextData = window.ContextManager.buildDynamicContext();
 
             // DB entities 정보
-            const dbEntities = Database.current ? Database.current.entities : {};
+            const dbEntities = window.Database.current ? window.Database.current.entities : {};
             const entitiesSummary = `Characters: ${Object.keys(dbEntities.characters || {}).length}, Factions: ${Object.keys(dbEntities.factions || {}).length}, Locations: ${Object.keys(dbEntities.locations || {}).length}, Concepts: ${Object.keys(dbEntities.concepts || {}).length}, Threads: ${Object.keys(dbEntities.threads || {}).length}`;
 
             // contextWindow 정보
-            const windowTurns = ContextManager.contextWindow.map(turn => {
+            const windowTurns = window.ContextManager.contextWindow.map(turn => {
                 return {
                     turnIndex: turn.turnIndex,
-                    hasDesign: !!turn.design,
-                    hasRender: !!turn.render,
-                    mentionedEntities: turn.mentioned_entities,
-                    dbCommands: turn.db_commands?.length || 0
+                    hasDesign: !!turn.TRP_design,
+                    hasRender: !!turn.TRP_render,
+                    mentionedEntities: turn.TRP_mentioned_entities,
+                    dbCommands: turn.TRP_db_commands?.length || 0
                 };
             });
 
@@ -213,13 +230,69 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.contextOverlayPanel.classList.remove('overlay-hidden');
             elements.contextOverlayPanel.style.display = 'flex';
 
-            // 닫기 버튼 이벤트
-            document.getElementById('close-context-overlay-btn').addEventListener('click', () => {
-                elements.contextOverlayPanel.classList.add('overlay-hidden');
-            });
+            // 이벤트 리스너는 이미 이벤트 위임으로 등록됨
         } else {
             elements.contextOverlayPanel.classList.add('overlay-hidden');
         }
+    });
+
+    // API 키 설정 버튼 이벤트
+    elements.apiKeyBtn.addEventListener('click', () => {
+        // 설정 모달 닫기
+        elements.settingsModal.classList.add('hidden');
+
+        // 현재 API 키 표시
+        elements.apiKeyInput.value = APIManager.apiKey || '';
+
+        // 현재 선택된 모델 버튼 하이라이트
+        updateModelButtonState();
+
+        // API 키 모달 열기
+        elements.apiKeyModal.classList.remove('hidden');
+    });
+
+    // 모델 선택 버튼 상태 업데이트 함수
+    function updateModelButtonState() {
+        const modelButtons = document.querySelectorAll('.model-select-btn');
+        modelButtons.forEach(btn => {
+            if (btn.dataset.model === APIManager.selectedModel) {
+                btn.style.backgroundColor = '#0d9488';
+                btn.style.color = 'white';
+            } else {
+                btn.style.backgroundColor = 'var(--bg-button)';
+                btn.style.color = 'var(--text-primary)';
+            }
+        });
+    }
+
+    // 모델 선택 버튼 이벤트
+    document.addEventListener('click', (e) => {
+        if (e.target.classList.contains('model-select-btn')) {
+            const selectedModel = e.target.dataset.model;
+            APIManager.setModel(selectedModel);
+            updateModelButtonState();
+        }
+    });
+
+    // API 키 저장 버튼
+    elements.saveApiKeyBtn.addEventListener('click', () => {
+        const apiKey = elements.apiKeyInput.value.trim();
+        if (apiKey) {
+            APIManager.setApiKey(apiKey);
+            elements.apiKeyModal.classList.add('hidden');
+            alert('API 키가 저장되었습니다.');
+        } else {
+            alert('API 키를 입력해주세요.');
+        }
+    });
+
+    // API 키 모달 닫기 버튼들
+    elements.cancelApiKeyBtn.addEventListener('click', () => {
+        elements.apiKeyModal.classList.add('hidden');
+    });
+
+    elements.closeApiKeyModalBtn.addEventListener('click', () => {
+        elements.apiKeyModal.classList.add('hidden');
     });
 
     // 전역으로 노출
@@ -230,4 +303,5 @@ document.addEventListener('DOMContentLoaded', () => {
     window.APIManager = APIManager;
     window.Database = Database;
     window.DatabaseParser = DatabaseParser;
+    window.ContentManager = ContentManager;
 });

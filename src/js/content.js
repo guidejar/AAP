@@ -27,7 +27,9 @@ export const ContentManager = {
 
         this.iconButtons = iconButtons;
 
+        // pages는 PageManager가 처리하므로 제외
         Object.keys(iconButtons).forEach(key => {
+            if (key === 'pages') return; // PageManager에서 처리
             iconButtons[key].addEventListener('click', () => this.handleToggleContent(this.contentData[key], key));
         });
 
@@ -37,6 +39,20 @@ export const ContentManager = {
             textarea.style.height = 'auto';
             textarea.style.height = (textarea.scrollHeight) + 'px';
         });
+
+        // 이벤트 위임: overlayPanel의 버튼 클릭 처리 (한 번만 등록)
+        elements.overlayPanel.addEventListener('click', (e) => {
+            const target = e.target.closest('button');
+            if (!target) return;
+
+            if (target.id === 'close-overlay-btn') {
+                this.closeAndResetState();
+            } else if (target.id === 'switch-to-modal-btn') {
+                this.switchToModalView();
+            } else if (target.id === 'pin-btn') {
+                this.togglePinState();
+            }
+        });
     },
 
     generateContentList(data) {
@@ -44,8 +60,12 @@ export const ContentManager = {
     },
 
     populateModal(data) {
-        document.getElementById('content-modal-title').textContent = data.title;
-        document.getElementById('content-modal-body').innerHTML = this.generateContentList(data);
+        // DOM 요소 캐싱
+        const modalTitle = this.elements.contentModal.querySelector('#content-modal-title');
+        const modalBody = this.elements.contentModal.querySelector('#content-modal-body');
+
+        if (modalTitle) modalTitle.textContent = data.title;
+        if (modalBody) modalBody.innerHTML = this.generateContentList(data);
         this.callbacks.updateSwitchButtonState();
     },
 
@@ -63,9 +83,7 @@ export const ContentManager = {
             <div class="flex-1 overflow-y-auto pr-2">${this.generateContentList(data)}</div>
         </div>`;
 
-        document.getElementById('close-overlay-btn').addEventListener('click', () => this.closeAndResetState());
-        document.getElementById('switch-to-modal-btn').addEventListener('click', () => this.switchToModalView());
-        document.getElementById('pin-btn').addEventListener('click', () => this.togglePinState());
+        // 이벤트 리스너는 init()에서 이벤트 위임으로 한 번만 등록됨
         this.updatePinButtonUI();
     },
 
@@ -86,8 +104,10 @@ export const ContentManager = {
     },
 
     updatePinButtonUI() {
-        const pinBtn = document.getElementById('pin-btn');
+        // DOM 요소 캐싱
+        const pinBtn = this.elements.overlayPanel.querySelector('#pin-btn');
         if (!pinBtn) return;
+
         let svgHTML, tooltip;
         if (this.pinState === 'unpinned') {
             tooltip = '패널 고정';
@@ -155,6 +175,19 @@ export const ContentManager = {
             contentModal.classList.remove('hidden');
             this.updateActiveIconState();
             this.callbacks.updateResizerState();
+
+            // 페이지 목록인 경우 PageManager에 알림
+            if (key === 'pages' && window.PageManager) {
+                setTimeout(() => {
+                    // DOM 요소 캐싱
+                    const modalBody = this.elements.contentModal.querySelector('#content-modal-body');
+                    const listItems = modalBody ? modalBody.querySelectorAll('li') : [];
+                    if (listItems.length > 0 && window.PageManager.setupPageListItems) {
+                        console.log('[ContentManager] Notifying PageManager to setup items (pinned case)');
+                        window.PageManager.setupPageListItems(listItems);
+                    }
+                }, 100);
+            }
             return;
         }
 
@@ -172,6 +205,22 @@ export const ContentManager = {
         this.callbacks.updatePlaceholderVisibility();
         this.callbacks.updateResizerState();
         this.updateActiveIconState();
+
+        // 페이지 목록인 경우 PageManager에 알림 (이벤트 리스너 재등록용)
+        if (key === 'pages' && window.PageManager) {
+            setTimeout(() => {
+                // DOM 요소 캐싱
+                const modalBody = this.elements.contentModal.querySelector('#content-modal-body');
+                const modalItems = modalBody ? modalBody.querySelectorAll('li') : [];
+                const overlayItems = this.elements.overlayPanel.querySelectorAll('li');
+                const listItems = [...modalItems, ...overlayItems];
+
+                if (listItems.length > 0 && window.PageManager.setupPageListItems) {
+                    console.log('[ContentManager] Notifying PageManager to setup items');
+                    window.PageManager.setupPageListItems(listItems);
+                }
+            }, 100);
+        }
     },
 
     hideAllViews() {

@@ -41,19 +41,19 @@ export const ContextManager = {
         this.contextWindow.push({
             turnIndex: this.contextWindow.length,
             timestamp: new Date().toISOString(),
-            design: turnData.design || null,
-            render: turnData.render || null,
-            mentioned_entities: turnData.mentioned_entities || {},
-            db_commands: turnData.db_commands || []
+            TRP_design: turnData.TRP_design || null,
+            TRP_render: turnData.TRP_render || null,
+            TRP_mentioned_entities: turnData.TRP_mentioned_entities || {},
+            TRP_db_commands: turnData.TRP_db_commands || []
         });
     },
 
-    // 3턴 이상 지난 응답의 render 삭제
+    // 3턴 이상 지난 응답의 TRP_render 삭제
     cleanOldRenders() {
         const currentTurn = this.contextWindow.length - 1;
         this.contextWindow.forEach((turn, idx) => {
             if (currentTurn - idx >= 3) {
-                delete turn.render;
+                delete turn.TRP_render;
             }
         });
     },
@@ -63,7 +63,7 @@ export const ContextManager = {
         if (this.contextWindow.length === 0) return {};
 
         const latestTurn = this.contextWindow[this.contextWindow.length - 1];
-        const mentioned = latestTurn.mentioned_entities || {};
+        const mentioned = latestTurn.TRP_mentioned_entities || {};
 
         const relatedInfo = {
             characters: {},
@@ -75,10 +75,10 @@ export const ContextManager = {
 
         // 전체 턴 순회하며 언급된 entity 정보 수집
         this.contextWindow.forEach(turn => {
-            if (!turn.design) return;
+            if (!turn.TRP_design) return;
 
             // introduced에서 entity 정보 찾기
-            const introduced = turn.design.introduced || {};
+            const introduced = turn.TRP_design.introduced || {};
 
             if (mentioned.character_ids) {
                 mentioned.character_ids.forEach(id => {
@@ -139,13 +139,13 @@ export const ContextManager = {
         if (window.Database && window.Database.current) {
             const db = window.Database.current;
 
-            // db_commands 예시
+            // TRP_db_commands 예시
             const exampleResponse = {
-                "render": {
+                /*"TRP_render": {
                     "title": "PLACEHOLDER_TITLE",
-                    "creative_engaging_scenes": "PLACEHOLDER_CHARACTER_NAME(C001)는 PLACEHOLDER_LOCATION_NAME(L001)에서 PLACEHOLDER_FACTION_NAME(F001)의 비밀을 발견했다."
-                },
-                "db_commands": [
+                    "creative_engaging_scenes": "PLACEHOLDER_인물한글명칭은 PLACEHOLDER_장소한글명칭에서 PLACEHOLDER_세력한글명칭과 조우했다. PLACEHOLDER_인물명은 긴장한 표정을 감추지 못했다. PLACEHOLDER_ENGLISH_NAME가 그를 막아섰다. PLACEHOLDER_개념명에 대한 이야기가 오갔다."
+                },*/
+                "TRP_db_commands": [
                     {
                         "target": "entities.characters",
                         "operation": "set",
@@ -163,6 +163,18 @@ export const ContextManager = {
                         "operation": "set",
                         "key": "F001",
                         "value": {"name": "PLACEHOLDER_ENGLISH_NAME", "description": "PLACEHOLDER_DESCRIPTION"}
+                    },
+                    {
+                        "target": "entities.concepts",
+                        "operation": "set",
+                        "key": "K001",
+                        "value": {"name": "PLACEHOLDER_ENGLISH_NAME", "description": "PLACEHOLDER_DESCRIPTION"}
+                    },
+                    {
+                        "target": "entities.threads",
+                        "operation": "set",
+                        "key": "thread_001",
+                        "value": {"name": "PLACEHOLDER_THREAD_NAME", "description": "PLACEHOLDER_DESCRIPTION", "status": "active"}
                     },
                     {
                         "target": "terminology.character_names",
@@ -210,11 +222,11 @@ ${JSON.stringify(exampleResponse, null, 2)}
         const recentTurns = this.contextWindow.slice(-3);
         recentTurns.forEach(turn => {
             dbContext += `### Turn ${turn.turnIndex}\n`;
-            if (turn.design) {
-                dbContext += `**Design:**\n\`\`\`json\n${JSON.stringify(turn.design, null, 2)}\n\`\`\`\n\n`;
+            if (turn.TRP_design) {
+                dbContext += `**TRP_design:**\n\`\`\`json\n${JSON.stringify(turn.TRP_design, null, 2)}\n\`\`\`\n\n`;
             }
-            if (turn.render) {
-                dbContext += `**Render:**\n\`\`\`json\n${JSON.stringify(turn.render, null, 2)}\n\`\`\`\n\n`;
+            if (turn.TRP_render) {
+                dbContext += `**TRP_render:**\n\`\`\`json\n${JSON.stringify(turn.TRP_render, null, 2)}\n\`\`\`\n\n`;
             }
         });
 

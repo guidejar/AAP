@@ -148,3 +148,16 @@ html { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparen
     visibility: visible;
     transform: translateX(-50%) translateY(-4px);
 }
+
+/* Page list item active state */
+.page-list-item.active {
+    background-color: var(--text-accent) !important;
+}
+
+.page-list-item.active span {
+    color: white !important;
+}
+
+.page-list-item.active svg {
+    color: white !important;
+}

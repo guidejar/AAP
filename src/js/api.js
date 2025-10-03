@@ -3,8 +3,9 @@ import { ResponseFormat } from './response-format.js';
 
 export const APIManager = {
     apiKey: '',
-    apiEndpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent',
-    conversationHistory: [],    
+    selectedModel: 'gemini-2.5-flash-lite',
+    apiEndpoint: '',
+    conversationHistory: [],
     responseSchema: ResponseFormat, // JSON 응답 스키마
     contextManager: null, // ContextManager 참조
 
@@ -18,11 +19,29 @@ export const APIManager = {
             this.apiKey = savedKey;
         }
 
+        // localStorage에서 모델 선택 불러오기
+        const savedModel = localStorage.getItem('gemini_model');
+        if (savedModel) {
+            this.selectedModel = savedModel;
+        }
+
+        // 엔드포인트 설정
+        this.updateEndpoint();
     },
 
     setApiKey(key) {
         this.apiKey = key;
         localStorage.setItem('gemini_api_key', key);
+    },
+
+    setModel(model) {
+        this.selectedModel = model;
+        localStorage.setItem('gemini_model', model);
+        this.updateEndpoint();
+    },
+
+    updateEndpoint() {
+        this.apiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${this.selectedModel}:generateContent`;
     },
 
     async sendMessage(userMessage) {

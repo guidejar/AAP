@@ -14,10 +14,17 @@ export const Utils = {
     },
 
     updatePlaceholderVisibility() {
-        const { overlayPanel, mobileImagePlaceholder } = this.elements;
+        const { overlayPanel, mobileImagePlaceholder, rightPanel, rightPanelContent } = this.elements;
+
+        // 1. 오른쪽 패널이 닫혀있으면 플레이스홀더 표시
+        const isRightPanelClosed = rightPanel.offsetWidth === 0 || rightPanelContent.classList.contains('hidden');
+
+        // 2. 또는 오버레이가 pinned 상태로 표시중이면 플레이스홀더 표시
         const isPinnedOverlayVisible = !overlayPanel.classList.contains('overlay-hidden') &&
                                       this.getters.getPinState() !== 'unpinned';
-        mobileImagePlaceholder.classList.toggle('hidden', !isPinnedOverlayVisible);
+
+        const shouldShowPlaceholder = isRightPanelClosed || isPinnedOverlayVisible;
+        mobileImagePlaceholder.classList.toggle('hidden', !shouldShowPlaceholder);
     },
 
     updateSwitchButtonState() {
